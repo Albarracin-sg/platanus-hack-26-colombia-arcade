@@ -10,6 +10,20 @@ Open to everyone — you don't need to be a hackathon participant and you can jo
 
 ---
 
+## 🚏 Our Game: PORTAL 11:59 — El Último Transmi
+
+Single-player horizontal lane-dodge at a Bogotá paradero. Esquivá el tráfico que cruza la avenida de noche, saltá charcos y conos, agachate bajo letreros y trailers, y subite al último TransMilenio antes de la medianoche. Dos etapas, dos paletas de noche.
+
+**Controls:**
+- **W/S** (joystick up/down) — change lanes (3 lanes: far, middle, near)
+- **U** (P1_1) — jump (puddles, cones, low traffic in your lane)
+- **I** (P1_2) — crouch (overhead signs and trailers)
+- **A/D** (joystick left/right) — move back / forward along the road
+
+**Scoring:** near-misses on traffic in your lane give bonus points. Best score is saved via the arcade storage bridge.
+
+
+
 ## 🏆 Prizes
 
 ### 🥇 Best Game: chosen by Platanus Team
