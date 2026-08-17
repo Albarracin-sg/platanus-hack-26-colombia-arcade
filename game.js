@@ -189,6 +189,43 @@ const AUDIO = {
 };
 
 // ---------------------------------------------------------------------------
+// Music — procedural chiptune loop (Profile A: cozy exploration). Starts on
+// the START1 gesture (next to AUDIO.init), plays during gameplay, ducks
+// briefly when a strong SFX fires, stops on game over. Reuses AUDIO.tone.
+// ---------------------------------------------------------------------------
+const MUSIC = {
+  step: 125,                                          // ~120 BPM, 16th notes — driving energy
+  _pos: 0, _mute: 0, t: null,
+  // 3 sections x 24 steps -> 72-step cycle (~9 s before repeat).
+  // Square waves, staccato, bass pumping on every step. D minor. Original melodies
+  // composed in the driving, emotional style of an Undertale battle track.
+  // A: driving verse — syncopated lead over relentless bass
+  // B: emotional bridge — opens up, more space, Bb color
+  // C: climax — reaches high (F5) then resolves home
+  T: [
+    { l: [294,0,349,0, 440,440,0,587, 523,0,440,0, 349,0,392,440, 0,349,0,294, 0,0,330,349],
+      b: [147,147,147,147, 117,117,117,117, 175,175,175,175, 131,131,131,131, 147,147,147,147, 117,117,131,131] },
+    { l: [466,0,440,0, 349,0,392,0, 440,0,587,0, 523,0,440,0, 392,0,349,0, 294,0,0,0],
+      b: [117,117,117,117, 98,98,98,98, 117,117,117,117, 131,131,131,131, 147,147,147,147, 110,110,110,110] },
+    { l: [587,0,523,0, 440,0,349,0, 392,0,440,0, 587,0,698,0, 587,0,523,440, 392,0,349,0],
+      b: [147,147,147,147, 117,117,117,117, 98,98,98,98, 131,131,131,131, 147,147,147,147, 147,147,147,147] }
+  ],
+  play() {
+    if (this.t) return;
+    this.t = setInterval(() => {
+      if (performance.now() < this._mute) { this._pos = (this._pos + 1) % 72; return; }
+      const i = this._pos % 24, s = (this._pos / 24) | 0;
+      const lf = this.T[s].l[i], bf = this.T[s].b[i];
+      if (lf) AUDIO.tone('square', lf, lf, 0.11, 0.05);
+      if (bf) AUDIO.tone('square', bf, bf, 0.11, 0.04);
+      this._pos = (this._pos + 1) % 72;
+    }, this.step);
+  },
+  duck(ms) { this._mute = performance.now() + ms; },
+  stop() { if (this.t) clearInterval(this.t); this.t = null; this._pos = 0; }
+};
+
+// ---------------------------------------------------------------------------
 // Storage — window.platanusArcadeStorage bridge with localStorage fallback.
 // Top-5 leaderboard; always validate data read back (shape may have changed).
 // ---------------------------------------------------------------------------
@@ -250,46 +287,60 @@ const STORAGE = (() => {
 // ---------------------------------------------------------------------------
 function drawPlayer(g, o) {
   g.clear();
-  const s = o.stretch;
-  if (o.state === 'jump') {
-    g.fillStyle(0x202030, 1);
-    g.fillEllipse(0, 20, 44 * s, 12);
-    g.fillStyle(0x2d3436, 1);
-    g.fillEllipse(-14, 8, 9, 7);
-    g.fillEllipse(14, 8, 9, 7);
-    g.fillStyle(0xf4c95d, 1);
-    g.fillEllipse(0, -1, 20, 15);
-    g.fillStyle(0xf1c40f, 1);
-    g.fillRect(-8, 5, 16, 4);
+  const crouched = o.state === 'crouch';
+  const jumping = o.state === 'jump';
+  const skin = 0xf3c39a;
+  const hair = 0x2c3e50;
+  const shirt = 0xf4c95d;
+  const shirtB = 0xd4a93a;
+  const pants = 0x2c3e50;
+  // Shadow at ground line (y≈50)
+  g.fillStyle(0x000000, 0.35);
+  g.fillEllipse(24, 50, 44, 10);
+  if (crouched) {
+    // Planted feet + short bent legs
+    g.fillStyle(pants, 1);
+    g.fillRect(13, 47, 9, 4);
+    g.fillRect(26, 47, 9, 4);
+    g.fillRect(15, 40, 6, 8);
+    g.fillRect(27, 40, 6, 8);
+    // Hunched body, wide and short
+    g.fillStyle(shirt, 1);
+    g.fillRoundedRect(11, 26, 26, 14, 5);
+    g.fillStyle(shirtB, 1);
+    g.fillRoundedRect(11, 34, 26, 6, 3);
+    // Head low and slightly forward (to the right)
+    g.fillStyle(skin, 1);
+    g.fillCircle(27, 21, 5);
+    g.fillStyle(hair, 1);
+    g.fillRoundedRect(21, 14, 11, 7, 3);
     g.fillStyle(0x1f1f28, 1);
-    g.fillRect(-12, -9, 24, 16);
+    g.fillCircle(28, 21, 1.2);
   } else {
-    g.fillStyle(0x202030, 1);
-    g.fillEllipse(0, 26, 44 * s, 10);
-    g.fillStyle(0x2d3436, 1);
-    if (o.state === 'crouch') {
-      g.fillEllipse(-13, 14, 8, 6);
-      g.fillEllipse(13, 14, 8, 6);
-    } else {
-      g.fillEllipse(-13, 16, 8, 10);
-      g.fillEllipse(13, 16, 8, 10);
-    }
-    g.fillStyle(0xf4c95d, 1);
-    g.fillRoundedRect(-16, (o.state === 'crouch' ? 2 : -14), 32, (o.state === 'crouch' ? 12 : 30), 10);
-    g.fillStyle(0x16a085, 1);
-    g.fillRoundedRect(-16, (o.state === 'crouch' ? 2 : -14), 10, (o.state === 'crouch' ? 12 : 30), 5);
-    g.fillStyle(0xf1c40f, 1);
-    if (o.state === 'crouch') {
-      g.fillRect(-9, 8, 14, 4);
-    } else {
-      g.fillRect(-9, -7, 14, 4);
-    }
+    const legY = jumping ? 34 : 36;
+    const legH = jumping ? 10 : 12;
+    // Feet
+    g.fillStyle(pants, 1);
+    g.fillRect(14, 47, 8, 4);
+    g.fillRect(26, 47, 8, 4);
+    // Legs (tucked when jumping)
+    g.fillRect(16, legY, 6, legH);
+    g.fillRect(26, legY, 6, legH);
+    // Body/shirt
+    g.fillStyle(shirt, 1);
+    g.fillRoundedRect(14, 18, 20, 18, 4);
+    g.fillStyle(shirtB, 1);
+    g.fillRoundedRect(14, 30, 20, 6, 3);
+    // Head
+    g.fillStyle(skin, 1);
+    g.fillCircle(24, 12, 6);
+    // Hair
+    g.fillStyle(hair, 1);
+    g.fillRoundedRect(18, 5, 12, 7, 3);
+    // Eyes
     g.fillStyle(0x1f1f28, 1);
-    if (o.state === 'crouch') {
-      g.fillRoundedRect(-14, -6, 28, 10, 5);
-    } else {
-      g.fillRoundedRect(-14, -18, 28, 14, 6);
-    }
+    g.fillCircle(22, 12, 1.2);
+    g.fillCircle(26, 12, 1.2);
   }
 }
 function drawObstacle(g, o) {
@@ -327,22 +378,33 @@ function drawObstacle(g, o) {
   } else if (t === 'car' || t === 'carMid' || t === 'ghost') {
     const col = t === 'ghost' ? 0x9b59b6 : CARS[(o.seed || 0) % CARS.length];
     const a = t === 'ghost' ? 0.55 : 1;
+    // Outline
     g.fillStyle(0x1a1a22, a);
     g.fillRoundedRect(-halfW - 2, -halfH - 2, o.w + 4, o.h + 4, 8);
+    // Body
     g.fillStyle(col, a);
     g.fillRoundedRect(-halfW, -halfH, o.w, o.h, 7);
-    g.fillStyle(0x1a1a22, a);
-    g.fillRoundedRect(-halfW + 8, -halfH + 3, o.w - 34, 6, 3);
-    g.fillRoundedRect(-halfW + 8, halfH - 9, o.w - 34, 6, 3);
-    g.fillStyle(0xb3d4ff, a * 0.9);
-    g.fillRect(-halfW + 8, -halfH + 2, o.w - 16, 6);
-    g.fillRect(-halfW + 8, halfH - 4, o.w - 16, 6);
-    g.fillStyle(0x111118, a);
-    g.fillCircle(halfW - 5, -halfH + 3, 2);
-    g.fillCircle(halfW - 5, halfH - 3, 2);
+    // Roof line
+    g.fillRoundedRect(-halfW + 8, -halfH - 4, o.w - 16, 6, 3);
+    // Windows (top + bottom strips)
+    g.fillStyle(0xb3d4ff, a * 0.85);
+    g.fillRect(-halfW + 10, -halfH + 2, o.w - 20, 5);
+    g.fillRect(-halfW + 10, halfH - 7, o.w - 20, 5);
+    // Headlights (left = front of car since it moves leftward toward player)
     g.fillStyle(0xffd166, a);
-    g.fillCircle(-halfW + 3, -halfH + 3, 2);
-    g.fillCircle(-halfW + 3, halfH - 3, 2);
+    g.fillCircle(-halfW + 4, -halfH + 4, 2.5);
+    g.fillCircle(-halfW + 4, halfH - 4, 2.5);
+    // Taillights (right = rear)
+    g.fillStyle(0xe74c3c, a);
+    g.fillCircle(halfW - 4, -halfH + 4, 2);
+    g.fillCircle(halfW - 4, halfH - 4, 2);
+    // Wheels (two visible, dark with hubcap)
+    g.fillStyle(0x111118, a);
+    g.fillCircle(-halfW + 12, halfH + 1, 5);
+    g.fillCircle(halfW - 12, halfH + 1, 5);
+    g.fillStyle(0x555566, a);
+    g.fillCircle(-halfW + 12, halfH + 1, 2);
+    g.fillCircle(halfW - 12, halfH + 1, 2);
   } else if (t === 'bar') {
     g.fillStyle(0xf4c95d, 1);
     g.fillRect(-6, -halfH, 12, o.h);
@@ -786,6 +848,7 @@ class GameScene extends Phaser.Scene {
     if (p.invuln > 0) return;
     if (o.type === 'static' && o.arm > 0) return;
     if (!o.hit) return;
+    if (Math.abs(o.y - LANES[p.lane]) > 45) return;  // only collide within player's lane
     const pb = this.playerBox();
     if (overlap(pb, o)) {
       this.hit();
@@ -811,6 +874,7 @@ class GameScene extends Phaser.Scene {
     const p = this.player;
     this.lives--;
     this.drawHearts();
+    MUSIC.duck(180);
     AUDIO.hit();
     this.cameras.main.shake(160, 0.008);
     this.flashRed();
@@ -1024,6 +1088,7 @@ class GameScene extends Phaser.Scene {
     this.stage = stage;
     this.palIdx = stage === 2 ? 1 : 0;
     this.lerpT = 0;
+    if (this.busG) { this.busG.destroy(); this.busG = null; this.bus = null; }
     this.drawCity(0);
     this.buildRain();
     if (stage === 2) this.showBanner('ETAPA 2: NOCHES DE NEÓN', 2200);
@@ -1079,6 +1144,7 @@ class GameScene extends Phaser.Scene {
     this.player.setTexture('p_stand');
     this.player.state = 'stand';
     this.player.lane = 2;
+    this.player.x = 90;
     this.player.y = LANES[2];
     this.player.vy = 0;
     this.player.grounded = true;
@@ -1086,12 +1152,14 @@ class GameScene extends Phaser.Scene {
     this.player.setAlpha(1);
     this.player.setScale(1, 1);
     this.player.shadow.setScale(1, 1);
+    this.player.shadow.setPosition(90, LANES[2] + 26);
     this.boarding = true;
+    this.showBanner('SUBIENDO AL BUS', 1500);
   }
 
   updateBoard(dt) {
     const p = this.player;
-    const doorX = this.bus.x + 330 - 44;
+    const doorX = this.bus.x + 121;
     if (!this.boarding) return;
     if (Math.abs(p.x - doorX) > 8) {
       p.x += Math.sign(doorX - p.x) * 130 * dt;
@@ -1115,6 +1183,8 @@ class GameScene extends Phaser.Scene {
         this.finalizeScores();
       } else {
         this.setupStage(2);
+        this.playing = true;
+        if (this.busG) { this.busG.destroy(); this.busG = null; this.bus = null; }
         this.player.x = 90;
         this.player.lane = 2;
         this.player.y = LANES[2];
@@ -1135,6 +1205,7 @@ class GameScene extends Phaser.Scene {
   endGame() {
     if (this.screen === 'over' || this.screen === 'win') return;
     this.playing = false;
+    MUSIC.stop();
     if (this.stage === 2 && !this.won) {
       this.won = true;
       this.screen = 'win';
@@ -1299,6 +1370,7 @@ class GameScene extends Phaser.Scene {
         this.initAudio = true;
         AUDIO.init();
       }
+      MUSIC.play();
       this.startGame();
     }
   }
