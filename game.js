@@ -13,14 +13,24 @@
 const W = 800;
 const H = 600;
 const STORAGE_KEY = 'portal-11:59:lb:v2';
-const STAGE_TIME = [45, 40];
+const STAGE_TIME = [45, 40, 35, 30];
+// Spawn interval (base, min) per stage in milliseconds. Lower = denser & harder.
+const STAGE_DIFFICULTY = [[1000, 500], [720, 360], [600, 300], [460, 240]];
+// Obstacle horizontal speed multiplier per stage.
+const STAGE_SPEED_MUL = [1.0, 1.3, 1.45, 1.55];
 const PLAYER_Y = 500;
 // Horizontal lanes (far, middle, near). Player moves between them with W/S.
 const LANES = [305, 415, 500];
 const CARS = [0xe74c3c, 0x2c5fa6, 0xf1c40f, 0x8e44ad, 0x16a085];
 const PAL = [
-  { skyTop: 0x1c2340, skyBottom: 0x2a3352, road: 0x202028, lane: 0xfff5b3, curb: 0x3a3a44, build: 0x141a30, win: 0xf4c95d, moon: 0xe8ecf2 },
-  { skyTop: 0x0b0618, skyBottom: 0x231040, road: 0x160d26, lane: 0xbfa3ff, curb: 0x2a1a3a, build: 0x0d071a, win: 0xff8fc8, moon: 0xbfa3ff }
+  // Stage 1 — dusk lavender
+  { skyTop: 0x1c2340, skyBottom: 0x2a3352, road: 0x202028, lane: 0xfff5b3, curb: 0x3a3a44, build: 0x141a30, win: 0xf4c95d, moon: 0xe8ecf2, rain: 0x9db2d4 },
+  // Stage 2 — neon teal night
+  { skyTop: 0x0b0618, skyBottom: 0x231040, road: 0x160d26, lane: 0xbfa3ff, curb: 0x2a1a3a, build: 0x0d071a, win: 0xff8fc8, moon: 0xbfa3ff, rain: 0x6dd5ed },
+  // Stage 3 — orange fire dusk
+  { skyTop: 0x2a0a04, skyBottom: 0x7a2a10, road: 0x1a0a02, lane: 0xffd9a8, curb: 0x3a1a08, build: 0x1a0804, win: 0xffb866, moon: 0xfff0c0, rain: 0xffb866 },
+  // Stage 4 — emerald dawn forest
+  { skyTop: 0x0a2a1a, skyBottom: 0x1a6038, road: 0x0e1a10, lane: 0xc8f5b0, curb: 0x1a3a20, build: 0x082818, win: 0x6bff9c, moon: 0xc8f5d0, rain: 0x88e0a0 }
 ];
 const LETTER_GRID = [
   ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
@@ -60,10 +70,11 @@ const OBS = {
   puddle:    { w: 48,  h: 20, y: 500 },
   cone:      { w: 34,  h: 40, y: 500 },
   skate:     { w: 56,  h: 36, y: 500 },
+  drone:     { w: 80,  h: 40, y: 305, sp: 240 },
   moto:      { w: 92,  h: 34, y: 500, sp: 205 },
   car:       { w: 130, h: 44, y: 500, sp: 180 },
   carMid:    { w: 130, h: 44, y: 415, sp: 240 },
-  truck:     { w: 220, h: 90, y: 305, sp: 150, hit: false },
+  truck:     { w: 220, h: 90, y: 305, sp: 150 },
   bar:       { w: 170, h: 58, y: 449, sp: 150 },
   truckNear: { w: 200, h: 58, y: 449, sp: 160 },
   ghost:     { w: 60,  h: 40, y: 415, sp: 255 }
@@ -71,13 +82,23 @@ const OBS = {
 // Spawn type tables per stage (relative weights; 'static' picks puddle/cone/skate).
 const SPAWN = [
   [
-    { t: 'static', w: 34 }, { t: 'carMid', w: 20 }, { t: 'car', w: 16 },
-    { t: 'moto', w: 12 }, { t: 'bar', w: 10 }, { t: 'truck', w: 8 }
+    { t: 'static', w: 30 }, { t: 'carMid', w: 20 }, { t: 'car', w: 16 },
+    { t: 'moto', w: 12 }, { t: 'bar', w: 10 }, { t: 'truck', w: 14 }, { t: 'drone', w: 8 }
   ],
   [
-    { t: 'static', w: 24 }, { t: 'ghost', w: 16 }, { t: 'bar', w: 15 },
-    { t: 'truckNear', w: 10 }, { t: 'carMid', w: 14 }, { t: 'car', w: 12 },
-    { t: 'moto', w: 8 }, { t: 'truck', w: 8 }
+    { t: 'static', w: 22 }, { t: 'ghost', w: 14 }, { t: 'bar', w: 13 },
+    { t: 'truckNear', w: 10 }, { t: 'carMid', w: 12 }, { t: 'car', w: 10 },
+    { t: 'moto', w: 7 }, { t: 'truck', w: 12 }, { t: 'drone', w: 12 }
+  ],
+  [
+    { t: 'static', w: 16 }, { t: 'carMid', w: 18 }, { t: 'car', w: 12 },
+    { t: 'bar', w: 12 }, { t: 'truckNear', w: 10 }, { t: 'ghost', w: 6 },
+    { t: 'moto', w: 5 }, { t: 'truck', w: 12 }, { t: 'drone', w: 14 }
+  ],
+  [
+    { t: 'carMid', w: 20 }, { t: 'car', w: 16 }, { t: 'bar', w: 14 },
+    { t: 'truckNear', w: 12 }, { t: 'static', w: 10 }, { t: 'moto', w: 8 },
+    { t: 'truck', w: 10 }, { t: 'drone', w: 18 }
   ]
 ];
 const STATIC_TYPES = ['puddle', 'puddle', 'cone', 'cone', 'skate'];
@@ -194,35 +215,41 @@ const AUDIO = {
 // briefly when a strong SFX fires, stops on game over. Reuses AUDIO.tone.
 // ---------------------------------------------------------------------------
 const MUSIC = {
-  step: 125,                                          // ~120 BPM, 16th notes — driving energy
-  _pos: 0, _mute: 0, t: null,
-  // 3 sections x 24 steps -> 72-step cycle (~9 s before repeat).
-  // Square waves, staccato, bass pumping on every step. D minor. Original melodies
-  // composed in the driving, emotional style of an Undertale battle track.
-  // A: driving verse — syncopated lead over relentless bass
-  // B: emotional bridge — opens up, more space, Bb color
-  // C: climax — reaches high (F5) then resolves home
-  T: [
+  step: 125,                                          // ~120 BPM, 16th notes
+  _pos: 0, _stage: 1, _mute: 0, t: null,
+  // 4 stage-specific 24-step patterns. Square waves, staccato, bass pumping.
+  // Each stage has its own musical character. Original compositions.
+  // Stage 1: D minor battle — driving, relentless
+  // Stage 2: F major chase — slightly more melodic
+  // Stage 3: A minor frantic (orange) — denser, climbing to G5
+  // Stage 4: C major triumph (green) — climbing to G5, hopeful
+  S: [
     { l: [294,0,349,0, 440,440,0,587, 523,0,440,0, 349,0,392,440, 0,349,0,294, 0,0,330,349],
       b: [147,147,147,147, 117,117,117,117, 175,175,175,175, 131,131,131,131, 147,147,147,147, 117,117,131,131] },
-    { l: [466,0,440,0, 349,0,392,0, 440,0,587,0, 523,0,440,0, 392,0,349,0, 294,0,0,0],
-      b: [117,117,117,117, 98,98,98,98, 117,117,117,117, 131,131,131,131, 147,147,147,147, 110,110,110,110] },
-    { l: [587,0,523,0, 440,0,349,0, 392,0,440,0, 587,0,698,0, 587,0,523,440, 392,0,349,0],
-      b: [147,147,147,147, 117,117,117,117, 98,98,98,98, 131,131,131,131, 147,147,147,147, 147,147,147,147] }
+    { l: [349,0,440,349, 440,0,523,0, 349,0,440,587, 659,0,523,440, 440,0,440,349, 392,0,349,0],
+      b: [87,87,87,87, 131,131,131,131, 87,87,87,87, 175,175,175,175, 131,131,131,131, 98,98,98,98] },
+    { l: [440,0,587,440, 659,0,587,0, 440,523,659,0, 784,0,659,587, 523,0,587,440, 0,440,0,523],
+      b: [110,110,110,110, 131,131,131,131, 147,147,147,147, 110,110,110,110, 165,165,165,165, 110,110,110,110] },
+    { l: [262,0,330,392, 523,0,392,330, 392,0,494,0, 587,0,494,330, 392,0,330,0, 262,196,262,0],
+      b: [131,131,131,131, 98,98,98,98, 131,131,131,131, 196,196,196,196, 131,131,131,131, 87,87,87,87] }
   ],
-  play() {
+  play(stage) {
+    if (stage && this._stage !== stage) {
+      this._stage = Math.min(4, Math.max(1, stage | 0));
+      this._pos = 0;
+    }
     if (this.t) return;
     this.t = setInterval(() => {
-      if (performance.now() < this._mute) { this._pos = (this._pos + 1) % 72; return; }
-      const i = this._pos % 24, s = (this._pos / 24) | 0;
-      const lf = this.T[s].l[i], bf = this.T[s].b[i];
+      if (performance.now() < this._mute) { this._pos = (this._pos + 1) % 24; return; }
+      const tr = this.S[this._stage - 1] || this.S[0];
+      const lf = tr.l[this._pos], bf = tr.b[this._pos];
       if (lf) AUDIO.tone('square', lf, lf, 0.11, 0.05);
       if (bf) AUDIO.tone('square', bf, bf, 0.11, 0.04);
-      this._pos = (this._pos + 1) % 72;
+      this._pos = (this._pos + 1) % 24;
     }, this.step);
   },
   duck(ms) { this._mute = performance.now() + ms; },
-  stop() { if (this.t) clearInterval(this.t); this.t = null; this._pos = 0; }
+  stop() { if (this.t) clearInterval(this.t); this.t = null; this._pos = 0; this._stage = 1; }
 };
 
 // ---------------------------------------------------------------------------
@@ -362,11 +389,30 @@ function drawObstacle(g, o) {
     g.fillStyle(0xf8f8f8, 1);
     g.fillRect(-halfW * 0.55, 0, halfW * 1.1, 4);
   } else if (t === 'skate') {
+    g.fillStyle(0x1a1a22, 1);
+    g.fillRoundedRect(-halfW, -halfH * 0.3, o.w, o.h * 0.65, 5);
     g.fillStyle(0xb3372a, 1);
-    g.fillRoundedRect(-halfW, -halfH * 0.5, o.w, o.h * 0.55, 4);
+    g.fillRoundedRect(-halfW + 3, -halfH * 0.55, o.w - 6, o.h * 0.55, 3);
+    g.fillStyle(0x222222, 1);
+    g.fillCircle(-halfW * 0.55, halfH * 0.45, 4);
+    g.fillCircle(halfW * 0.55, halfH * 0.45, 4);
     g.fillStyle(0xecf0f1, 1);
-    g.fillRect(-halfW * 0.6, halfH * 0.4, o.w * 0.3, o.h * 0.45);
-    g.fillRect(halfW * 0.3, halfH * 0.4, o.w * 0.3, o.h * 0.45);
+    g.fillRect(-halfW + 4, -halfH * 0.45, o.w - 8, 2);
+  } else if (t === 'drone') {
+    // Small UFO body — round horizontal ellipse with a glowing dome
+    g.fillStyle(0x000000, 0.3);
+    g.fillEllipse(0, halfH + 1, o.w * 0.7, 4);
+    g.fillStyle(0x3a3a4a, 1);
+    g.fillEllipse(0, 0, o.w * 0.95, o.h * 0.55);
+    g.fillStyle(0x55556a, 1);
+    g.fillEllipse(0, -halfH * 0.35, o.w * 0.75, o.h * 0.22);
+    g.fillStyle(0x9bb3ff, 0.85);
+    g.fillEllipse(0, -halfH * 0.45, o.w * 0.5, o.h * 0.3);
+    // Wing lights
+    g.fillStyle(0xffd166, 1);
+    g.fillCircle(-halfW * 0.85, halfH * 0.05, 2.5);
+    g.fillStyle(0xff5577, 1);
+    g.fillCircle(halfW * 0.85, halfH * 0.05, 2.5);
   } else if (t === 'moto') {
     g.fillStyle(0x2c3e50, 1);
     g.fillRoundedRect(-halfW + 6, -halfH + 4, o.w - 12, 8, 3);
@@ -378,33 +424,41 @@ function drawObstacle(g, o) {
   } else if (t === 'car' || t === 'carMid' || t === 'ghost') {
     const col = t === 'ghost' ? 0x9b59b6 : CARS[(o.seed || 0) % CARS.length];
     const a = t === 'ghost' ? 0.55 : 1;
-    // Outline
-    g.fillStyle(0x1a1a22, a);
-    g.fillRoundedRect(-halfW - 2, -halfH - 2, o.w + 4, o.h + 4, 8);
-    // Body
+    // Shadow under car
+    g.fillStyle(0x000000, 0.3);
+    g.fillEllipse(0, halfH + 1, o.w * 0.7, 4);
+    // Body main
     g.fillStyle(col, a);
-    g.fillRoundedRect(-halfW, -halfH, o.w, o.h, 7);
-    // Roof line
-    g.fillRoundedRect(-halfW + 8, -halfH - 4, o.w - 16, 6, 3);
-    // Windows (top + bottom strips)
-    g.fillStyle(0xb3d4ff, a * 0.85);
-    g.fillRect(-halfW + 10, -halfH + 2, o.w - 20, 5);
-    g.fillRect(-halfW + 10, halfH - 7, o.w - 20, 5);
-    // Headlights (left = front of car since it moves leftward toward player)
-    g.fillStyle(0xffd166, a);
-    g.fillCircle(-halfW + 4, -halfH + 4, 2.5);
-    g.fillCircle(-halfW + 4, halfH - 4, 2.5);
+    g.fillRoundedRect(-halfW, -halfH, o.w, o.h, 5);
+    // Cabin (darker, inset) — defines top half
+    const cabI = o.w * 0.2;
+    const cabH = o.h * 0.45;
+    g.fillStyle(0x161620, a);
+    g.fillRoundedRect(-halfW + cabI, -halfH + 3, o.w - cabI * 2, cabH, 4);
+    // Cabin glass
+    g.fillStyle(0x9ec8ee, a * 0.9);
+    g.fillRect(-halfW + cabI + 4, -halfH + 5, o.w - cabI * 2 - 8, cabH - 4);
+    // Center pillar (splits front/back windows)
+    g.fillStyle(0x161620, a);
+    g.fillRect(-2, -halfH + 5, 4, cabH - 4);
+    // Door trim line (horizontal accent)
+    g.fillStyle(0x0a0a12, a);
+    g.fillRect(-halfW + 6, o.h * 0.45, o.w - 12, 2);
+    // Headlights (left = front)
+    g.fillStyle(0xffe066, a);
+    g.fillCircle(-halfW + 5, halfH - 7, 2.5);
+    g.fillCircle(-halfW + 5, -halfH + 7, 2.5);
     // Taillights (right = rear)
     g.fillStyle(0xe74c3c, a);
-    g.fillCircle(halfW - 4, -halfH + 4, 2);
-    g.fillCircle(halfW - 4, halfH - 4, 2);
-    // Wheels (two visible, dark with hubcap)
+    g.fillCircle(halfW - 5, halfH - 7, 2);
+    g.fillCircle(halfW - 5, -halfH + 7, 2);
+    // Wheels (at bottom corners, with hubcap)
     g.fillStyle(0x111118, a);
-    g.fillCircle(-halfW + 12, halfH + 1, 5);
-    g.fillCircle(halfW - 12, halfH + 1, 5);
-    g.fillStyle(0x555566, a);
-    g.fillCircle(-halfW + 12, halfH + 1, 2);
-    g.fillCircle(halfW - 12, halfH + 1, 2);
+    g.fillCircle(-halfW * 0.5, halfH + 1, 5.5);
+    g.fillCircle(halfW * 0.5, halfH + 1, 5.5);
+    g.fillStyle(0x4a4a55, a);
+    g.fillCircle(-halfW * 0.5, halfH + 1, 2.2);
+    g.fillCircle(halfW * 0.5, halfH + 1, 2.2);
   } else if (t === 'bar') {
     g.fillStyle(0xf4c95d, 1);
     g.fillRect(-6, -halfH, 12, o.h);
@@ -541,14 +595,14 @@ class GameScene extends Phaser.Scene {
       seed = (seed * 1103515245 + 12345) & 0x7fffffff;
       return seed / 0x7fffffff;
     };
-    const winW = this.palIdx === 1 ? 0xff8fc8 : 0xf4c95d;
+    const winW = p.win;
     ctx.fillStyle(p.build, 1);
     let x = -30;
     while (x < W + 40) {
       const bw = 50 + rnd() * 55;
       const bh = 80 + rnd() * 150;
       ctx.fillRect(x, 250 - bh, bw, bh);
-      ctx.fillStyle(winW, this.stage === 2 ? 0.5 : 0.28);
+      ctx.fillStyle(winW, this.palIdx >= 2 ? 0.5 : (this.palIdx === 1 ? 0.5 : 0.28));
       const cols = Math.max(2, Math.floor(bw / 18));
       const rows = Math.max(3, Math.floor(bh / 24));
       for (let i = 0; i < cols; i++) {
@@ -619,7 +673,7 @@ class GameScene extends Phaser.Scene {
     const c = this.add.container(0, 0);
     c.setDepth(2);
     this.rainLayer = c;
-    const n = this.stage === 2 ? 44 : 24;
+    const n = [24, 44, 60, 80][this.stage - 1] || 24;
     this.rain = [];
     for (let i = 0; i < n; i++) {
       const g = this.add.graphics();
@@ -637,7 +691,8 @@ class GameScene extends Phaser.Scene {
       if (r.y > H) { r.y = -8; r.x = rand(0, W); }
       if (r.x < -4) r.x = W + 4;
       r.g.clear();
-      r.g.fillStyle(this.stage === 2 ? 0x6dd5ed : 0x9db2d4, 0.5);
+      const rc = this.palette().rain;
+      r.g.fillStyle(rc, 0.5);
       r.g.fillRect(r.x, r.y, 2, 9);
     }
   }
@@ -761,7 +816,8 @@ class GameScene extends Phaser.Scene {
       busy.until = this.time.now + 4500;
     }
     const def = OBS[type];
-    const speed = type === 'static' ? 0 : (def.sp || 170) * (stage === 2 ? 1.3 : 1) + this.elapsed * 0.006;
+    const spMul = STAGE_SPEED_MUL[stage - 1] || 1;
+    const speed = type === 'static' ? 0 : (def.sp || 170) * spMul + this.elapsed * 0.006;
     let oy = def.y;
     if (type === 'static') {
       oy = Math.random() < 0.6 ? LANES[this.player.lane] : LANES[Math.floor(Math.random() * LANES.length)];
@@ -786,9 +842,10 @@ class GameScene extends Phaser.Scene {
 
   updateSpawn(dt) {
     if (!this.playing || this.screen !== 'play') return;
-    const base = this.stage === 1 ? 1000 : 720;
-    const min = this.stage === 1 ? 500 : 360;
-    const interval = Math.max(min, base - this.elapsed * 9) * (0.85 + Math.random() * 0.3) / 1000;
+    const cfg = STAGE_DIFFICULTY[this.stage - 1] || [720, 360];
+    const base = cfg[0], min = cfg[1];
+    const ramp = this.stage >= 4 ? 18 : this.stage === 3 ? 14 : this.stage === 2 ? 11 : 9;
+    const interval = Math.max(min, base - this.elapsed * ramp) * (0.85 + Math.random() * 0.3) / 1000;
     this.spawnT -= dt;
     if (this.spawnT <= 0) {
       this.spawnT = interval;
@@ -1086,13 +1143,18 @@ class GameScene extends Phaser.Scene {
 
   setupStage(stage) {
     this.stage = stage;
-    this.palIdx = stage === 2 ? 1 : 0;
+    this.palIdx = stage - 1;
     this.lerpT = 0;
     if (this.busG) { this.busG.destroy(); this.busG = null; this.bus = null; }
     this.drawCity(0);
     this.buildRain();
-    if (stage === 2) this.showBanner('ETAPA 2: NOCHES DE NEÓN', 2200);
-    else this.showBanner('ETAPA 1: ÚLTIMO TURNO', 2200);
+    const titles = [
+      'ETAPA 1: ÚLTIMO TURNO',
+      'ETAPA 2: NOCHES DE NEÓN',
+      'ETAPA 3: ARDIENTE NOCHE',
+      'ETAPA 4: ALBOREZCA'
+    ];
+    this.showBanner(titles[stage - 1] || ('ETAPA ' + stage), 2200);
     this.timer = STAGE_TIME[stage - 1];
     this.updateTimer();
     this.stageText.setText('ETAPA ' + stage);
@@ -1176,13 +1238,15 @@ class GameScene extends Phaser.Scene {
     this.fadeRect = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0);
     this.fadeRect.setDepth(70);
     this.tweens.add({ targets: this.fadeRect, alpha: 1, duration: 700, onComplete: () => {
-      if (this.stage === 2) {
+      if (this.stage === 4) {
         this.won = true;
         this.screen = 'win';
+        this.showBanner('¡ALCANZASTE EL ALBA!', 2800, 'Cuatro etapas. La ciudad despertó.');
         AUDIO.win();
         this.finalizeScores();
       } else {
-        this.setupStage(2);
+        const next = this.stage + 1;
+        this.setupStage(next);
         this.playing = true;
         if (this.busG) { this.busG.destroy(); this.busG = null; this.bus = null; }
         this.player.x = 90;
@@ -1197,6 +1261,7 @@ class GameScene extends Phaser.Scene {
         this.countT = 2.5;
         this.screen = 'count';
         this.countdown();
+        MUSIC.play(next);
       }
       this.tweens.add({ targets: this.fadeRect, alpha: 0, duration: 500, onComplete: () => this.fadeRect.destroy() });
     } });
@@ -1206,16 +1271,9 @@ class GameScene extends Phaser.Scene {
     if (this.screen === 'over' || this.screen === 'win') return;
     this.playing = false;
     MUSIC.stop();
-    if (this.stage === 2 && !this.won) {
-      this.won = true;
-      this.screen = 'win';
-      AUDIO.win();
-      this.showBanner('¡LLEGASTE AL ÚLTIMO TRANSMÍ!', 2600, 'Subiste al bus antes de la medianoche');
-    } else {
-      this.screen = 'over';
-      AUDIO.over();
-      this.showBanner('SE ACABÓ EL TIEMPO', 2200, 'El bus se fue sin vos...');
-    }
+    this.screen = 'over';
+    AUDIO.over();
+    this.showBanner('SE ACABÓ EL TIEMPO', 2200, 'El bus se fue sin vos...');
     this.finalizeScores();
   }
 
@@ -1370,7 +1428,7 @@ class GameScene extends Phaser.Scene {
         this.initAudio = true;
         AUDIO.init();
       }
-      MUSIC.play();
+      MUSIC.play(this.stage);
       this.startGame();
     }
   }
