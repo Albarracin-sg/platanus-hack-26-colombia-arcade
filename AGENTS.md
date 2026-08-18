@@ -6,6 +6,29 @@ You are helping build an arcade game for a hackathon challenge. Follow these ins
 
 Create an engaging, fun arcade game in **game.js** using **Phaser 3** (v3.87.0) that meets all restrictions.
 
+## Game Concept: PORTAL 11:59 — El Último Transmi
+
+**Core idea (main game concept):** The player runs INSIDE a TransMilenio station in Bogotá, Colombia, dodging people to catch the last bus before midnight (11:59 PM). It's an endless runner with progressive speed and a high-score leaderboard.
+
+**Setting & identity:**
+- Indoor BRT station (TransMilenio aesthetic): gray walls and floor with red accents, fluorescent lights, yellow safety lane lines, red warning line, "TRANSMILENIO" signage, route signals (B/K/H/J), digital clock showing 11:59, turnstiles, benches, security cameras.
+- Diagonal top-down perspective (ceiling NOT visible), movement left → right.
+- 5 lanes: `LANES = [260, 330, 400, 470, 540]`, `PLAYER_Y = 540`.
+
+**Obstacles (all are people, drawn procedurally with Phaser Graphics, ~80x100px):**
+- `police` — dark blue uniform, cap, gold badge
+- `vendor` — street vendor with big red backpack/cart of goods
+- `singer` — informal singer with guitar and microphone
+- `kid` — running kid, smaller, colorful clothes
+- `student` — student with giant orange backpack and books
+
+**Mechanics:**
+- Progressive difficulty: `STAGE_SPEED_MUL = [0.8, 1.0, 1.2, 1.4]`, `STAGE_DIFFICULTY = [[1200,600],[900,450],[700,350],[500,250]]`.
+- Controls: W/S change lane (up/down), U jump, I duck, Enter start (arcade codes `P1_U`/`P1_1`/`START1`).
+- Persistence: leaderboard via `window.platanusArcadeStorage`, key `'portal-11:59:lb:v2'`.
+
+**Status (current):** F1 scenario ✅, F2 obstacles ✅, F3 mechanics (fine-tune balance) in progress, F4 polish (walk/run animations, near-miss feedback), F5 cover + delivery (cover.png and metadata.json already done). Size: 33.16 KB minified (limit 50 KB).
+
 ## ⚠️ IMPORTANT: Files to Edit
 
 **ONLY edit these three files:**
