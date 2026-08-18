@@ -7,4 +7,11 @@ yarn.lock
 .env
 .env.local
 .atl
-openspec 
+openspec
+
+# Playwright MCP (snapshots, logs, capturas)
+.playwright-mcp/
+
+# Helpers temporales de generación de cover
+generate-cover.html
+public/generate-cover.html 
