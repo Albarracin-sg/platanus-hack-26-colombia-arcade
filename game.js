@@ -1,8 +1,6 @@
 // PORTAL 11:59 — El Último Transmi
 // Platanus Hack 26 — Colombia Arcade
-// Single-player horizontal lane-dodge at a Bogotá paradero.
-// Esquivá el tráfico que cruza la avenida de noche, saltá charcos y conos,
-// agachate bajo letreros y trailers, y subite al último TransMilenio.
+// Single-player horizontal lane-dodge at a Bogotá TransMilenio station.
 // Editable surface (HARD INVARIANT): game.js, metadata.json, cover.png ONLY.
 
 'use strict';
@@ -14,23 +12,16 @@ const W = 800;
 const H = 600;
 const STORAGE_KEY = 'portal-11:59:lb:v2';
 const STAGE_TIME = [45, 40, 35, 30];
-// Spawn interval (base, min) per stage in milliseconds. Lower = denser & harder.
-const STAGE_DIFFICULTY = [[1000, 500], [720, 360], [600, 300], [460, 240]];
-// Obstacle horizontal speed multiplier per stage.
-const STAGE_SPEED_MUL = [1.0, 1.3, 1.45, 1.55];
-const PLAYER_Y = 500;
-// Horizontal lanes (far, middle, near). Player moves between them with W/S.
-const LANES = [305, 415, 500];
+const STAGE_DIFFICULTY = [[1200, 600], [900, 450], [700, 350], [500, 250]];
+const STAGE_SPEED_MUL = [0.8, 1.0, 1.2, 1.4];
+const PLAYER_Y = 540;
+const LANES = [260, 330, 400, 470, 540];
 const CARS = [0xe74c3c, 0x2c5fa6, 0xf1c40f, 0x8e44ad, 0x16a085];
 const PAL = [
-  // Stage 1 — dusk lavender
-  { skyTop: 0x1c2340, skyBottom: 0x2a3352, road: 0x202028, lane: 0xfff5b3, curb: 0x3a3a44, build: 0x141a30, win: 0xf4c95d, moon: 0xe8ecf2, rain: 0x9db2d4 },
-  // Stage 2 — neon teal night
-  { skyTop: 0x0b0618, skyBottom: 0x231040, road: 0x160d26, lane: 0xbfa3ff, curb: 0x2a1a3a, build: 0x0d071a, win: 0xff8fc8, moon: 0xbfa3ff, rain: 0x6dd5ed },
-  // Stage 3 — orange fire dusk
-  { skyTop: 0x2a0a04, skyBottom: 0x7a2a10, road: 0x1a0a02, lane: 0xffd9a8, curb: 0x3a1a08, build: 0x1a0804, win: 0xffb866, moon: 0xfff0c0, rain: 0xffb866 },
-  // Stage 4 — emerald dawn forest
-  { skyTop: 0x0a2a1a, skyBottom: 0x1a6038, road: 0x0e1a10, lane: 0xc8f5b0, curb: 0x1a3a20, build: 0x082818, win: 0x6bff9c, moon: 0xc8f5d0, rain: 0x88e0a0 }
+  { skyTop: 0x2a2a2a, skyBottom: 0x4a4a4a, road: 0x888888, lane: 0xf4c95d, curb: 0xc0392b, build: 0x666666, win: 0x888888, moon: 0xaaaaaa, rain: 0x999999 },
+  { skyTop: 0x1a1a1a, skyBottom: 0x3a3a3a, road: 0x7a7a7a, lane: 0xf4c95d, curb: 0xe74c3c, build: 0x5a5a5a, win: 0x777777, moon: 0x999999, rain: 0x888888 },
+  { skyTop: 0x0f0f0f, skyBottom: 0x2a2a2a, road: 0x6a6a6a, lane: 0xf4c95d, curb: 0xc0392b, build: 0x4a4a4a, win: 0x666666, moon: 0x888888, rain: 0x777777 },
+  { skyTop: 0x050505, skyBottom: 0x1a1a1a, road: 0x5a5a5a, lane: 0xf4c95d, curb: 0xe74c3c, build: 0x3a3a3a, win: 0x555555, moon: 0x777777, rain: 0x666666 }
 ];
 const LETTER_GRID = [
   ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
@@ -39,8 +30,6 @@ const LETTER_GRID = [
   ['V', 'W', 'X', 'Y', 'Z', '.', '-'],
   ['DEL', 'END']
 ];
-// DO NOT replace existing keys — they map to physical cabinet wiring.
-// To add local-test shortcuts, append extra keys to any array.
 const CABINET_KEYS = {
   P1_U: ['w'],
   P1_D: ['s'],
@@ -65,44 +54,31 @@ const CABINET_KEYS = {
   START1: ['Enter'],
   START2: ['2']
 };
-// Obstacle definitions — center-based boxes; y is the hitbox vertical center.
 const OBS = {
-  puddle:    { w: 48,  h: 20, y: 500 },
-  cone:      { w: 34,  h: 40, y: 500 },
-  skate:     { w: 56,  h: 36, y: 500 },
-  drone:     { w: 80,  h: 40, y: 305, sp: 240 },
-  moto:      { w: 92,  h: 34, y: 500, sp: 205 },
-  car:       { w: 130, h: 44, y: 500, sp: 180 },
-  carMid:    { w: 130, h: 44, y: 415, sp: 240 },
-  truck:     { w: 220, h: 90, y: 305, sp: 150 },
-  bar:       { w: 170, h: 58, y: 449, sp: 150 },
-  truckNear: { w: 200, h: 58, y: 449, sp: 160 },
-  ghost:     { w: 60,  h: 40, y: 415, sp: 255 }
+  police:    { w: 80,  h: 100, sp: 180 },
+  vendor:    { w: 90,  h: 100, sp: 140 },
+  singer:    { w: 80,  h: 100, sp: 160 },
+  kid:       { w: 60,  h: 75,  sp: 220 },
+  student:   { w: 85,  h: 100, sp: 130 }
 };
-// Spawn type tables per stage (relative weights; 'static' picks puddle/cone/skate).
 const SPAWN = [
   [
-    { t: 'static', w: 30 }, { t: 'carMid', w: 20 }, { t: 'car', w: 16 },
-    { t: 'moto', w: 12 }, { t: 'bar', w: 10 }, { t: 'truck', w: 14 }, { t: 'drone', w: 8 }
+    { t: 'police', w: 25 }, { t: 'vendor', w: 25 }, { t: 'singer', w: 20 },
+    { t: 'kid', w: 15 }, { t: 'student', w: 15 }
   ],
   [
-    { t: 'static', w: 22 }, { t: 'ghost', w: 14 }, { t: 'bar', w: 13 },
-    { t: 'truckNear', w: 10 }, { t: 'carMid', w: 12 }, { t: 'car', w: 10 },
-    { t: 'moto', w: 7 }, { t: 'truck', w: 12 }, { t: 'drone', w: 12 }
+    { t: 'police', w: 22 }, { t: 'vendor', w: 22 }, { t: 'singer', w: 20 },
+    { t: 'kid', w: 20 }, { t: 'student', w: 16 }
   ],
   [
-    { t: 'static', w: 16 }, { t: 'carMid', w: 18 }, { t: 'car', w: 12 },
-    { t: 'bar', w: 12 }, { t: 'truckNear', w: 10 }, { t: 'ghost', w: 6 },
-    { t: 'moto', w: 5 }, { t: 'truck', w: 12 }, { t: 'drone', w: 14 }
+    { t: 'police', w: 20 }, { t: 'vendor', w: 20 }, { t: 'singer', w: 20 },
+    { t: 'kid', w: 25 }, { t: 'student', w: 15 }
   ],
   [
-    { t: 'carMid', w: 20 }, { t: 'car', w: 16 }, { t: 'bar', w: 14 },
-    { t: 'truckNear', w: 12 }, { t: 'static', w: 10 }, { t: 'moto', w: 8 },
-    { t: 'truck', w: 10 }, { t: 'drone', w: 18 }
+    { t: 'police', w: 20 }, { t: 'vendor', w: 18 }, { t: 'singer', w: 18 },
+    { t: 'kid', w: 28 }, { t: 'student', w: 16 }
   ]
 ];
-const STATIC_TYPES = ['puddle', 'puddle', 'cone', 'cone', 'skate'];
-const STATIC_COLS = [150, 400, 650];
 
 // ---------------------------------------------------------------------------
 // Math / helpers
@@ -125,7 +101,7 @@ function lerpColor(c0, c1, t) {
 }
 
 // ---------------------------------------------------------------------------
-// Input — reverse index over CABINET_KEYS (never raw keys in game logic).
+// Input
 // ---------------------------------------------------------------------------
 function keyName(k) { return typeof k === 'string' && k.length === 1 ? k.toLowerCase() : k; }
 const KEY2CODE = {};
@@ -153,7 +129,7 @@ const INPUT = {
 };
 
 // ---------------------------------------------------------------------------
-// Audio — generated Web Audio tones only, gated on the START gesture.
+// Audio
 // ---------------------------------------------------------------------------
 const AUDIO = {
   ctx: null,
@@ -210,19 +186,11 @@ const AUDIO = {
 };
 
 // ---------------------------------------------------------------------------
-// Music — procedural chiptune loop (Profile A: cozy exploration). Starts on
-// the START1 gesture (next to AUDIO.init), plays during gameplay, ducks
-// briefly when a strong SFX fires, stops on game over. Reuses AUDIO.tone.
+// Music
 // ---------------------------------------------------------------------------
 const MUSIC = {
-  step: 125,                                          // ~120 BPM, 16th notes
+  step: 125,
   _pos: 0, _stage: 1, _mute: 0, t: null,
-  // 4 stage-specific 24-step patterns. Square waves, staccato, bass pumping.
-  // Each stage has its own musical character. Original compositions.
-  // Stage 1: D minor battle — driving, relentless
-  // Stage 2: F major chase — slightly more melodic
-  // Stage 3: A minor frantic (orange) — denser, climbing to G5
-  // Stage 4: C major triumph (green) — climbing to G5, hopeful
   S: [
     { l: [294,0,349,0, 440,440,0,587, 523,0,440,0, 349,0,392,440, 0,349,0,294, 0,0,330,349],
       b: [147,147,147,147, 117,117,117,117, 175,175,175,175, 131,131,131,131, 147,147,147,147, 117,117,131,131] },
@@ -253,8 +221,7 @@ const MUSIC = {
 };
 
 // ---------------------------------------------------------------------------
-// Storage — window.platanusArcadeStorage bridge with localStorage fallback.
-// Top-5 leaderboard; always validate data read back (shape may have changed).
+// Storage
 // ---------------------------------------------------------------------------
 const STORAGE = (() => {
   function bridge() {
@@ -309,8 +276,9 @@ const STORAGE = (() => {
     }
   };
 })();
+
 // ---------------------------------------------------------------------------
-// Procedural drawing helpers
+// Procedural drawing — Player (80×100 texture)
 // ---------------------------------------------------------------------------
 function drawPlayer(g, o) {
   g.clear();
@@ -321,171 +289,222 @@ function drawPlayer(g, o) {
   const shirt = 0xf4c95d;
   const shirtB = 0xd4a93a;
   const pants = 0x2c3e50;
-  // Shadow at ground line (y≈50)
+
   g.fillStyle(0x000000, 0.35);
-  g.fillEllipse(24, 50, 44, 10);
+  g.fillEllipse(40, 92, 50, 12);
+
   if (crouched) {
-    // Planted feet + short bent legs
     g.fillStyle(pants, 1);
-    g.fillRect(13, 47, 9, 4);
-    g.fillRect(26, 47, 9, 4);
-    g.fillRect(15, 40, 6, 8);
-    g.fillRect(27, 40, 6, 8);
-    // Hunched body, wide and short
+    g.fillRect(20, 85, 14, 7);
+    g.fillRect(44, 85, 14, 7);
+    g.fillRect(24, 70, 10, 16);
+    g.fillRect(46, 70, 10, 16);
     g.fillStyle(shirt, 1);
-    g.fillRoundedRect(11, 26, 26, 14, 5);
+    g.fillRoundedRect(18, 44, 44, 26, 6);
     g.fillStyle(shirtB, 1);
-    g.fillRoundedRect(11, 34, 26, 6, 3);
-    // Head low and slightly forward (to the right)
+    g.fillRoundedRect(18, 60, 44, 10, 4);
     g.fillStyle(skin, 1);
-    g.fillCircle(27, 21, 5);
+    g.fillCircle(46, 36, 9);
     g.fillStyle(hair, 1);
-    g.fillRoundedRect(21, 14, 11, 7, 3);
+    g.fillRoundedRect(36, 24, 18, 12, 4);
     g.fillStyle(0x1f1f28, 1);
-    g.fillCircle(28, 21, 1.2);
+    g.fillCircle(48, 36, 2);
   } else {
-    const legY = jumping ? 34 : 36;
-    const legH = jumping ? 10 : 12;
-    // Feet
+    const legY = jumping ? 58 : 62;
+    const legH = jumping ? 18 : 22;
     g.fillStyle(pants, 1);
-    g.fillRect(14, 47, 8, 4);
-    g.fillRect(26, 47, 8, 4);
-    // Legs (tucked when jumping)
-    g.fillRect(16, legY, 6, legH);
-    g.fillRect(26, legY, 6, legH);
-    // Body/shirt
+    g.fillRect(22, 85, 14, 7);
+    g.fillRect(44, 85, 14, 7);
+    g.fillRect(26, legY, 10, legH);
+    g.fillRect(44, legY, 10, legH);
     g.fillStyle(shirt, 1);
-    g.fillRoundedRect(14, 18, 20, 18, 4);
+    g.fillRoundedRect(22, 30, 36, 32, 5);
     g.fillStyle(shirtB, 1);
-    g.fillRoundedRect(14, 30, 20, 6, 3);
-    // Head
+    g.fillRoundedRect(22, 52, 36, 10, 4);
     g.fillStyle(skin, 1);
-    g.fillCircle(24, 12, 6);
-    // Hair
+    g.fillCircle(40, 20, 11);
     g.fillStyle(hair, 1);
-    g.fillRoundedRect(18, 5, 12, 7, 3);
-    // Eyes
+    g.fillRoundedRect(29, 7, 22, 13, 5);
     g.fillStyle(0x1f1f28, 1);
-    g.fillCircle(22, 12, 1.2);
-    g.fillCircle(26, 12, 1.2);
+    g.fillCircle(37, 20, 2);
+    g.fillCircle(43, 20, 2);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Procedural drawing — Obstacles (detailed, 80×100+)
+// ---------------------------------------------------------------------------
 function drawObstacle(g, o) {
   g.clear();
   const t = o.type;
-  const halfW = o.w / 2, halfH = o.h / 2;
-  g.fillStyle(0x000000, 0.35);
-  g.fillEllipse(0, halfH + 4, o.w, 8);
-  if (t === 'puddle') {
-    g.fillStyle(0x3d5a80, 0.8);
-    g.fillEllipse(0, 0, o.w * 0.8, o.h);
-    g.fillStyle(0x6fa8dc, 0.7);
-    g.fillEllipse(0, -2, o.w * 0.45, o.h * 0.5);
-    g.fillStyle(0x8fc9f2, 0.6);
-    g.fillEllipse(2, -3, o.w * 0.2, o.h * 0.25);
-  } else if (t === 'cone') {
-    g.fillStyle(0xe67e22, 1);
-    g.fillTriangle(-halfW, halfH, halfW, halfH, 0, -halfH);
-    g.fillStyle(0xf8f8f8, 1);
-    g.fillRect(-halfW * 0.55, 0, halfW * 1.1, 4);
-  } else if (t === 'skate') {
-    g.fillStyle(0x1a1a22, 1);
-    g.fillRoundedRect(-halfW, -halfH * 0.3, o.w, o.h * 0.65, 5);
-    g.fillStyle(0xb3372a, 1);
-    g.fillRoundedRect(-halfW + 3, -halfH * 0.55, o.w - 6, o.h * 0.55, 3);
-    g.fillStyle(0x222222, 1);
-    g.fillCircle(-halfW * 0.55, halfH * 0.45, 4);
-    g.fillCircle(halfW * 0.55, halfH * 0.45, 4);
-    g.fillStyle(0xecf0f1, 1);
-    g.fillRect(-halfW + 4, -halfH * 0.45, o.w - 8, 2);
-  } else if (t === 'drone') {
-    // Small UFO body — round horizontal ellipse with a glowing dome
-    g.fillStyle(0x000000, 0.3);
-    g.fillEllipse(0, halfH + 1, o.w * 0.7, 4);
-    g.fillStyle(0x3a3a4a, 1);
-    g.fillEllipse(0, 0, o.w * 0.95, o.h * 0.55);
-    g.fillStyle(0x55556a, 1);
-    g.fillEllipse(0, -halfH * 0.35, o.w * 0.75, o.h * 0.22);
-    g.fillStyle(0x9bb3ff, 0.85);
-    g.fillEllipse(0, -halfH * 0.45, o.w * 0.5, o.h * 0.3);
-    // Wing lights
-    g.fillStyle(0xffd166, 1);
-    g.fillCircle(-halfW * 0.85, halfH * 0.05, 2.5);
-    g.fillStyle(0xff5577, 1);
-    g.fillCircle(halfW * 0.85, halfH * 0.05, 2.5);
-  } else if (t === 'moto') {
+  const hw = o.w / 2, hh = o.h / 2;
+
+  g.fillStyle(0x000000, 0.3);
+  g.fillEllipse(0, hh + 5, o.w * 0.7, 10);
+
+  if (t === 'police') {
+    g.fillStyle(0x111111, 1);
+    g.fillRect(-18, hh - 12, 14, 12);
+    g.fillRect(4, hh - 12, 14, 12);
+    g.fillStyle(0x1a1a4e, 1);
+    g.fillRect(-14, hh * 0.3, 12, hh * 0.5);
+    g.fillRect(2, hh * 0.3, 12, hh * 0.5);
+    g.fillStyle(0x1a1a4e, 1);
+    g.fillRoundedRect(-22, -hh * 0.35, 44, hh * 0.7, 5);
+    g.fillStyle(0x111111, 1);
+    g.fillRect(-20, hh * 0.15, 40, 6);
+    g.fillStyle(0xf4c95d, 1);
+    g.fillRect(-4, hh * 0.15, 8, 6);
+    g.fillStyle(0xf4c95d, 1);
+    g.fillCircle(-12, -hh * 0.1, 5);
+    g.fillStyle(0xd4a93a, 1);
+    g.fillCircle(-12, -hh * 0.1, 3);
+    g.fillStyle(0x2a2a6e, 1);
+    g.fillRect(-22, -hh * 0.3, 8, 10);
+    g.fillRect(14, -hh * 0.3, 8, 10);
+    g.fillStyle(0xf3c39a, 1);
+    g.fillCircle(0, -hh * 0.55, 13);
+    g.fillStyle(0x1a1a4e, 1);
+    g.fillRoundedRect(-16, -hh * 0.8, 32, 12, 4);
+    g.fillStyle(0x111122, 1);
+    g.fillRect(-18, -hh * 0.68, 36, 5);
+    g.fillStyle(0xf4c95d, 1);
+    g.fillCircle(0, -hh * 0.74, 3);
+    g.fillStyle(0x1f1f28, 1);
+    g.fillCircle(-4, -hh * 0.55, 2);
+    g.fillCircle(4, -hh * 0.55, 2);
+
+  } else if (t === 'vendor') {
+    g.fillStyle(0x4a3520, 1);
+    g.fillRect(-16, hh - 10, 12, 10);
+    g.fillRect(4, hh - 10, 12, 10);
+    g.fillStyle(0x654321, 1);
+    g.fillRect(-12, hh * 0.3, 10, hh * 0.45);
+    g.fillRect(2, hh * 0.3, 10, hh * 0.45);
+    g.fillStyle(0xd4782a, 1);
+    g.fillRoundedRect(-20, -hh * 0.25, 40, hh * 0.6, 5);
+    g.fillStyle(0xc0392b, 1);
+    g.fillRoundedRect(-hw * 0.9, -hh * 0.5, o.w * 0.7, o.h * 0.75, 6);
+    g.fillStyle(0xf4c95d, 1);
+    g.fillRect(-hw * 0.7, -hh * 0.3, o.w * 0.4, 5);
+    g.fillRect(-hw * 0.7, -hh * 0.05, o.w * 0.4, 5);
+    g.fillRect(-hw * 0.7, hh * 0.15, o.w * 0.4, 5);
+    g.fillStyle(0x2ecc71, 1);
+    g.fillCircle(-hw * 0.6, -hh * 0.55, 6);
+    g.fillStyle(0xf39c12, 1);
+    g.fillCircle(-hw * 0.35, -hh * 0.6, 5);
+    g.fillStyle(0xe74c3c, 1);
+    g.fillCircle(-hw * 0.5, -hh * 0.7, 4);
+    g.fillStyle(0xa93226, 1);
+    g.fillRect(-14, -hh * 0.2, 4, hh * 0.4);
+    g.fillRect(10, -hh * 0.2, 4, hh * 0.4);
+    g.fillStyle(0xf3c39a, 1);
+    g.fillCircle(0, -hh * 0.45, 12);
+    g.fillStyle(0xd4a93a, 1);
+    g.fillRoundedRect(-14, -hh * 0.7, 28, 8, 4);
+    g.fillRect(-18, -hh * 0.62, 36, 4);
+    g.fillStyle(0x1f1f28, 1);
+    g.fillCircle(-4, -hh * 0.45, 2);
+    g.fillCircle(4, -hh * 0.45, 2);
+
+  } else if (t === 'singer') {
     g.fillStyle(0x2c3e50, 1);
-    g.fillRoundedRect(-halfW + 6, -halfH + 4, o.w - 12, 8, 3);
-    g.fillStyle(0x222222, 1);
-    g.fillCircle(-halfW + 8, halfH - 6, 7);
-    g.fillCircle(halfW - 8, halfH - 6, 7);
-    g.fillStyle(0xf1c40f, 1);
-    g.fillRect(halfW - 20, -halfH - 6, 5, 8);
-  } else if (t === 'car' || t === 'carMid' || t === 'ghost') {
-    const col = t === 'ghost' ? 0x9b59b6 : CARS[(o.seed || 0) % CARS.length];
-    const a = t === 'ghost' ? 0.55 : 1;
-    // Shadow under car
-    g.fillStyle(0x000000, 0.3);
-    g.fillEllipse(0, halfH + 1, o.w * 0.7, 4);
-    // Body main
-    g.fillStyle(col, a);
-    g.fillRoundedRect(-halfW, -halfH, o.w, o.h, 5);
-    // Cabin (darker, inset) — defines top half
-    const cabI = o.w * 0.2;
-    const cabH = o.h * 0.45;
-    g.fillStyle(0x161620, a);
-    g.fillRoundedRect(-halfW + cabI, -halfH + 3, o.w - cabI * 2, cabH, 4);
-    // Cabin glass
-    g.fillStyle(0x9ec8ee, a * 0.9);
-    g.fillRect(-halfW + cabI + 4, -halfH + 5, o.w - cabI * 2 - 8, cabH - 4);
-    // Center pillar (splits front/back windows)
-    g.fillStyle(0x161620, a);
-    g.fillRect(-2, -halfH + 5, 4, cabH - 4);
-    // Door trim line (horizontal accent)
-    g.fillStyle(0x0a0a12, a);
-    g.fillRect(-halfW + 6, o.h * 0.45, o.w - 12, 2);
-    // Headlights (left = front)
-    g.fillStyle(0xffe066, a);
-    g.fillCircle(-halfW + 5, halfH - 7, 2.5);
-    g.fillCircle(-halfW + 5, -halfH + 7, 2.5);
-    // Taillights (right = rear)
-    g.fillStyle(0xe74c3c, a);
-    g.fillCircle(halfW - 5, halfH - 7, 2);
-    g.fillCircle(halfW - 5, -halfH + 7, 2);
-    // Wheels (at bottom corners, with hubcap)
-    g.fillStyle(0x111118, a);
-    g.fillCircle(-halfW * 0.5, halfH + 1, 5.5);
-    g.fillCircle(halfW * 0.5, halfH + 1, 5.5);
-    g.fillStyle(0x4a4a55, a);
-    g.fillCircle(-halfW * 0.5, halfH + 1, 2.2);
-    g.fillCircle(halfW * 0.5, halfH + 1, 2.2);
-  } else if (t === 'bar') {
-    g.fillStyle(0xf4c95d, 1);
-    g.fillRect(-6, -halfH, 12, o.h);
-    g.fillRect(-halfW + 14, -halfH + 10, 4, 14);
-    g.fillRect(halfW - 18, -halfH + 10, 4, 14);
-    g.fillStyle(0x2c2c38, 1);
-    g.fillRoundedRect(-halfW, -halfH, o.w, o.h, 4);
-    g.fillStyle(0xf4c95d, 1);
-    g.fillRect(-halfW, -halfH + 4, o.w, 4);
-    g.fillRect(-halfW, halfH - 8, o.w, 4);
-    g.fillRect(-halfW + 8, -halfH + 4, 4, o.h - 12);
-    g.fillRect(halfW - 12, -halfH + 4, 4, o.h - 12);
-  } else if (t === 'truck' || t === 'truckNear') {
-    g.fillStyle(0x22222c, 1);
-    g.fillRoundedRect(-halfW, -halfH, o.w, o.h, 6);
+    g.fillRect(-16, hh - 10, 12, 10);
+    g.fillRect(4, hh - 10, 12, 10);
+    g.fillStyle(0x7d3c98, 1);
+    g.fillRect(-12, hh * 0.3, 10, hh * 0.45);
+    g.fillRect(2, hh * 0.3, 10, hh * 0.45);
+    g.fillStyle(0x27ae60, 1);
+    g.fillRoundedRect(-20, -hh * 0.25, 40, hh * 0.6, 5);
+    g.fillStyle(0x9b59b6, 1);
+    g.fillRect(-18, -hh * 0.2, 12, hh * 0.45);
+    g.fillRect(6, -hh * 0.2, 12, hh * 0.45);
+    g.fillStyle(0x8b4513, 1);
+    g.fillRect(-16, -hh * 0.2, 4, hh * 0.6);
+    g.fillStyle(0xd4a93a, 1);
+    g.fillEllipse(8, hh * 0.1, 20, 28);
+    g.fillStyle(0x8b4513, 1);
+    g.fillCircle(8, hh * 0.1, 4);
+    g.fillRect(16, -hh * 0.4, 4, hh * 0.5);
+    g.fillStyle(0xf3c39a, 1);
+    g.fillCircle(0, -hh * 0.45, 12);
+    g.fillStyle(0x2c3e50, 1);
+    g.fillRoundedRect(-14, -hh * 0.65, 28, 14, 5);
+    g.fillRect(-14, -hh * 0.45, 6, 20);
+    g.fillRect(8, -hh * 0.45, 6, 20);
+    g.fillStyle(0xf3c39a, 1);
+    g.fillRect(18, -hh * 0.15, 8, 16);
+    g.fillStyle(0x333333, 1);
+    g.fillCircle(22, -hh * 0.2, 5);
+    g.fillStyle(0x555555, 1);
+    g.fillRect(20, -hh * 0.15, 4, 12);
+    g.fillStyle(0x1f1f28, 1);
+    g.fillCircle(-4, -hh * 0.45, 2);
+    g.fillCircle(4, -hh * 0.45, 2);
+
+  } else if (t === 'kid') {
+    g.fillStyle(0xe74c3c, 1);
+    g.fillRect(-12, hh - 8, 10, 8);
+    g.fillRect(2, hh - 8, 10, 8);
+    g.fillStyle(0x2c3e50, 1);
+    g.fillRect(-8, hh * 0.25, 8, hh * 0.4);
+    g.fillRect(2, hh * 0.35, 8, hh * 0.3);
     g.fillStyle(0x3498db, 1);
-    g.fillRoundedRect(-halfW + 6, -halfH + 6, o.w - 12, o.h * 0.55, 4);
+    g.fillRoundedRect(-14, -hh * 0.2, 28, hh * 0.5, 4);
+    g.fillStyle(0xe74c3c, 1);
+    g.fillRect(-12, -hh * 0.05, 24, 5);
+    g.fillStyle(0xf3c39a, 1);
+    g.fillRect(-18, -hh * 0.1, 6, 14);
+    g.fillRect(12, -hh * 0.15, 6, 14);
+    g.fillStyle(0xf3c39a, 1);
+    g.fillCircle(0, -hh * 0.4, 10);
+    g.fillStyle(0x2c3e50, 1);
+    g.fillRoundedRect(-11, -hh * 0.6, 22, 10, 4);
+    g.fillCircle(-8, -hh * 0.55, 4);
+    g.fillCircle(6, -hh * 0.58, 3);
+    g.fillCircle(0, -hh * 0.62, 3);
+    g.fillStyle(0x1f1f28, 1);
+    g.fillCircle(-3, -hh * 0.4, 2);
+    g.fillCircle(3, -hh * 0.4, 2);
+
+  } else if (t === 'student') {
+    g.fillStyle(0x111111, 1);
+    g.fillRect(-16, hh - 10, 12, 10);
+    g.fillRect(4, hh - 10, 12, 10);
+    g.fillStyle(0x1a1a4e, 1);
+    g.fillRect(-12, hh * 0.3, 10, hh * 0.45);
+    g.fillRect(2, hh * 0.3, 10, hh * 0.45);
+    g.fillStyle(0xecf0f1, 1);
+    g.fillRoundedRect(-20, -hh * 0.25, 40, hh * 0.6, 5);
+    g.fillStyle(0xc0392b, 1);
+    g.fillRect(-3, -hh * 0.2, 6, 20);
+    g.fillTriangle(-5, -hh * 0.2 + 20, 5, -hh * 0.2 + 20, 0, -hh * 0.2 + 28);
+    g.fillStyle(0xe67e22, 1);
+    g.fillRoundedRect(-hw * 0.95, -hh * 0.55, o.w * 0.75, o.h * 0.8, 7);
+    g.fillStyle(0x27ae60, 1);
+    g.fillRoundedRect(-hw * 0.7, hh * 0.0, o.w * 0.4, o.h * 0.25, 4);
+    g.fillStyle(0xd35400, 1);
+    g.fillRect(-14, -hh * 0.2, 5, hh * 0.45);
+    g.fillRect(9, -hh * 0.2, 5, hh * 0.45);
+    g.fillStyle(0x3498db, 1);
+    g.fillRect(-hw * 0.6, -hh * 0.6, 16, 4);
+    g.fillStyle(0xe74c3c, 1);
+    g.fillRect(-hw * 0.5, -hh * 0.68, 14, 4);
+    g.fillStyle(0x2ecc71, 1);
+    g.fillRect(-hw * 0.55, -hh * 0.75, 12, 4);
     g.fillStyle(0xf4c95d, 1);
-    g.fillRect(-halfW + 6, halfH - 14, o.w - 12, 6);
-    g.fillStyle(0x22222c, 1);
-    g.fillRect(halfW - 26, -halfH + 6, 20, o.h - 12);
-    g.fillStyle(0xd9e2f2, 0.7);
-    g.fillRect(halfW - 20, -halfH + 10, 8, 10);
-    g.fillRect(halfW - 20, halfH - 20, 8, 10);
-    g.fillStyle(0x1a1a22, 1);
-    g.fillCircle(-halfW + 12, halfH - 4, 6);
-    g.fillCircle(halfW - 12, halfH - 4, 6);
+    g.fillRect(-hw * 0.3, -hh * 0.72, 3, 14);
+    g.fillStyle(0xf3c39a, 1);
+    g.fillCircle(0, -hh * 0.45, 12);
+    g.fillStyle(0x2c3e50, 1);
+    g.fillRect(-10, -hh * 0.48, 8, 7);
+    g.fillRect(2, -hh * 0.48, 8, 7);
+    g.fillRect(-2, -hh * 0.45, 4, 2);
+    g.fillStyle(0x85c1e9, 0.5);
+    g.fillRect(-9, -hh * 0.47, 6, 5);
+    g.fillRect(3, -hh * 0.47, 6, 5);
+    g.fillStyle(0x2c3e50, 1);
+    g.fillRoundedRect(-13, -hh * 0.65, 26, 10, 4);
   }
 }
 
@@ -506,7 +525,6 @@ class GameScene extends Phaser.Scene {
     this.counted = {};
     this.obstacles = [];
     this.parts = [];
-    this.rain = [];
     this.best = null;
     this.dx = 0;
     this.countT = 0;
@@ -526,7 +544,6 @@ class GameScene extends Phaser.Scene {
     for (const code in CABINET_KEYS) this.keys[code] = { pressed: false, held: false };
 
     this.buildWorld();
-    this.buildRain();
     this.buildPlayerTextures();
     this.buildPlayer();
     this.buildHUD();
@@ -537,7 +554,6 @@ class GameScene extends Phaser.Scene {
     this.events.once('destroy', () => this.teardown());
 
     this.enterTitle();
-
     this.setupInput();
   }
 
@@ -571,138 +587,193 @@ class GameScene extends Phaser.Scene {
     const c = this.city;
     c.removeAll(true);
     const p = this.palette();
-    const ctx = this.add.graphics();
-    c.add(ctx);
-    ctx.fillGradientStyle(p.skyTop, p.skyTop, p.skyBottom, p.skyBottom, 1);
-    ctx.fillRect(0, 0, W, H);
-    // Moon
-    ctx.fillStyle(p.moon, 0.9);
-    ctx.fillCircle(640, 96, 34);
-    ctx.fillStyle(p.skyTop, 1);
-    ctx.fillCircle(628, 86, 8);
-    ctx.fillCircle(650, 108, 6);
-    ctx.fillCircle(636, 112, 5);
-    // Stars
-    ctx.fillStyle(0xffffff, 0.55);
-    for (let i = 0; i < 46; i++) {
-      const x = ((i * 197) % W);
-      const y = 8 + ((i * 53) % 130);
-      ctx.fillRect(x, y, 2, 2);
+
+    const floor = this.add.graphics();
+    c.add(floor);
+    const wall = this.add.graphics();
+    c.add(wall);
+
+    // === WALL (y: 0–200) ===
+    wall.fillStyle(0x888888, 1);
+    wall.fillRect(0, 0, W, 200);
+
+    // Brick texture
+    wall.fillStyle(0x5e5e5e, 0.25);
+    for (let by = 0; by < 200; by += 20) {
+      const off = (by / 20 % 2) * 30;
+      for (let bx = off; bx < W; bx += 60) {
+        wall.fillRect(bx, by, 58, 18);
+      }
     }
-    // Skyline
+
+    // Fluorescent lights
+    wall.fillStyle(0xffffff, 1);
+    wall.fillRect(80, 28, 220, 6);
+    wall.fillRect(500, 28, 220, 6);
+    wall.fillRect(280, 58, 240, 6);
+    // Glow
+    wall.fillStyle(0xffffee, 0.25);
+    wall.fillRoundedRect(60, 16, 260, 40, 10);
+    wall.fillRoundedRect(480, 16, 260, 40, 10);
+    wall.fillRoundedRect(260, 46, 280, 40, 10);
+
+    // Red warning line at y=200
+    wall.fillStyle(0xc0392b, 1);
+    wall.fillRect(0, 196, W, 8);
+    // Yellow-black hazard stripe
+    wall.fillStyle(0xf4c95d, 0.7);
+    for (let sx = 0; sx < W; sx += 30) {
+      wall.fillRect(sx, 196, 15, 8);
+    }
+
+    // === TRANSMILENIO LOGO ===
+    const logoBg = this.add.graphics();
+    c.add(logoBg);
+    logoBg.fillStyle(0xc0392b, 0.9);
+    logoBg.fillRoundedRect(280, 85, 240, 40, 6);
+    const logoText = this.add.text(400, 105, 'TRANSMILENIO', {
+      fontFamily: 'monospace', fontSize: '26px', color: '#ffffff', fontStyle: 'bold'
+    }).setOrigin(0.5);
+    c.add(logoText);
+
+    // Route signs
+    const routes = ['B', 'K', 'H', 'J'];
+    const routeBgs = [0xc0392b, 0x2980b9, 0x27ae60, 0xf39c12];
+    for (let i = 0; i < 4; i++) {
+      const rx = 130 + i * 170;
+      const sg = this.add.graphics();
+      c.add(sg);
+      sg.fillStyle(routeBgs[i], 1);
+      sg.fillRoundedRect(rx - 18, 140, 36, 28, 4);
+      const rt = this.add.text(rx, 154, routes[i], {
+        fontFamily: 'monospace', fontSize: '16px', color: '#ffffff', fontStyle: 'bold'
+      }).setOrigin(0.5);
+      c.add(rt);
+    }
+
+    // Colorful posters
+    const posterColors = [0xe74c3c, 0x3498db, 0x2ecc71, 0xf39c12, 0x9b59b6];
     let seed = 12345;
-    const rnd = () => {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      return seed / 0x7fffffff;
-    };
-    const winW = p.win;
-    ctx.fillStyle(p.build, 1);
-    let x = -30;
-    while (x < W + 40) {
-      const bw = 50 + rnd() * 55;
-      const bh = 80 + rnd() * 150;
-      ctx.fillRect(x, 250 - bh, bw, bh);
-      ctx.fillStyle(winW, this.palIdx >= 2 ? 0.5 : (this.palIdx === 1 ? 0.5 : 0.28));
-      const cols = Math.max(2, Math.floor(bw / 18));
-      const rows = Math.max(3, Math.floor(bh / 24));
-      for (let i = 0; i < cols; i++) {
-        for (let j = 0; j < rows; j++) {
-          if (rnd() < 0.5) ctx.fillRect(x + 6 + i * 14, 258 - bh + 10 + j * 20, 6, 9);
-        }
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    const poster = this.add.graphics();
+    c.add(poster);
+    for (let i = 0; i < 5; i++) {
+      const px = 20 + i * 160;
+      const py = 130 + rnd() * 15;
+      const pw = 45 + rnd() * 25;
+      const ph = 40 + rnd() * 20;
+      poster.fillStyle(posterColors[i], 0.75);
+      poster.fillRoundedRect(px, py, pw, ph, 3);
+      poster.fillStyle(0xffffff, 0.3);
+      poster.fillRect(px + 3, py + 3, pw - 6, 2);
+      poster.fillRect(px + 3, py + ph - 5, pw - 6, 2);
+    }
+
+    // Digital clock
+    const clock = this.add.graphics();
+    c.add(clock);
+    clock.fillStyle(0x1a1a1a, 1);
+    clock.fillRoundedRect(690, 30, 60, 30, 4);
+    const clockText = this.add.text(720, 45, '11:59', {
+      fontFamily: 'monospace', fontSize: '14px', color: '#ff3333'
+    }).setOrigin(0.5);
+    c.add(clockText);
+
+    // Security cameras
+    const cams = this.add.graphics();
+    c.add(cams);
+    cams.fillStyle(0x333333, 1);
+    cams.fillRoundedRect(12, 8, 22, 14, 3);
+    cams.fillRect(23, 22, 4, 10);
+    cams.fillRoundedRect(766, 8, 22, 14, 3);
+    cams.fillRect(773, 22, 4, 10);
+    cams.fillStyle(0xff0000, 1);
+    cams.fillCircle(18, 13, 2);
+    cams.fillCircle(772, 13, 2);
+
+    // === FLOOR (y: 200–600) ===
+    floor.fillStyle(0x999999, 1);
+    floor.fillRect(0, 204, W, H - 204);
+
+    // Tile pattern
+    for (let ty = 204; ty < H; ty += 40) {
+      for (let tx = 0; tx < W; tx += 40) {
+        const alt = ((tx / 40 + ty / 40) % 2 === 0) ? 0x0a0a0a : 0;
+        floor.fillStyle(0x9a9a9a + alt, 1);
+        floor.fillRect(tx + 1, ty + 1, 38, 38);
       }
-      ctx.fillStyle(p.build, 1);
-      x += bw + 14;
     }
-    // Road band
-    ctx.fillStyle(p.road, 1);
-    ctx.fillRect(0, 250, W, 350);
-    // Curb strip
-    ctx.fillStyle(p.curb, 1);
-    ctx.fillRect(0, 250, W, 6);
-    // Lane dashes
-    ctx.fillStyle(p.lane, 0.5);
-    for (let y = 356; y <= 463; y += 107) {
-      for (let dx = 18; dx < W; dx += 80) {
-        ctx.fillRect(dx, y, 42, 4);
+
+    // Floor reflections of lights
+    floor.fillStyle(0xffffff, 0.12);
+    floor.fillRect(80, 210, 220, 90);
+    floor.fillRect(500, 210, 220, 90);
+    floor.fillRect(280, 250, 240, 90);
+
+    // Yellow safety lines between lanes
+    floor.fillStyle(p.lane, 0.6);
+    for (let i = 0; i < LANES.length - 1; i++) {
+      const ly = (LANES[i] + LANES[i + 1]) / 2;
+      for (let dx = 0; dx < W; dx += 50) {
+        floor.fillRect(dx, ly - 1, 30, 3);
       }
     }
-    // Guide columns (bus stops)
-    ctx.fillStyle(0xffffff, 0.55);
-    ctx.fillRect(266, 250, 2, 350);
-    ctx.fillRect(533, 250, 2, 350);
-    ctx.fillStyle(0xffffff, 0.28);
-    ctx.fillRect(268, 250, 2, 350);
-    ctx.fillRect(535, 250, 2, 350);
-    // Static posts / barrier dots along the curb
-    ctx.fillStyle(0x8a8a96, 0.8);
-    for (let x = 20; x < W; x += 130) {
-      ctx.fillRect(x, 254, 4, 14);
+
+    // Directional arrows on floor
+    floor.fillStyle(0xffffff, 0.1);
+    for (let ay = 290; ay < H; ay += 130) {
+      for (let ax = 150; ax < W; ax += 250) {
+        floor.fillTriangle(ax - 12, ay, ax + 4, ay - 8, ax + 4, ay + 8);
+        floor.fillRect(ax + 4, ay - 3, 12, 6);
+      }
     }
-    // Paradero shelter at left edge
-    const shel = this.add.graphics();
-    shel.fillStyle(0x22222c, 0.95);
-    shel.fillRoundedRect(0, 300, 66, 8, 2);
-    shel.fillRoundedRect(0, 300, 4, 96, 2);
-    shel.fillRoundedRect(62, 300, 4, 96, 2);
-    shel.fillStyle(0xf4c95d, 0.9);
-    shel.fillRect(8, 304, 12, 3);
-    shel.fillRect(44, 304, 12, 3);
-    shel.fillStyle(0x8fc9f2, 0.5);
-    shel.fillRect(6, 314, 52, 46);
-    c.add(shel);
-    // Static columns (hazard markers)
-    this.worldParts.cols = [];
-    for (const cx of STATIC_COLS) {
-      const col = this.add.graphics();
-      col.fillStyle(0xe67e22, 1);
-      col.fillRect(cx - 3, 258, 6, 14);
-      col.fillStyle(0xf8f8f8, 1);
-      col.fillRect(cx - 3, 258, 6, 4);
-      c.add(col);
-      this.worldParts.cols.push({ g: col, x: cx, busy: 0, until: 0 });
+
+    // === TURNSTILES (y: 204–240) ===
+    const turn = this.add.graphics();
+    c.add(turn);
+    for (let i = 0; i < 5; i++) {
+      const tx = 80 + i * 160;
+      turn.fillStyle(0x555555, 1);
+      turn.fillRect(tx, 206, 40, 28);
+      turn.fillStyle(0xc0392b, 0.8);
+      turn.fillRect(tx + 15, 210, 10, 20);
+      turn.fillStyle(0x888888, 1);
+      turn.fillRect(tx + 5, 218, 30, 3);
     }
+
+    // === BENCHES ===
+    const bench = this.add.graphics();
+    c.add(bench);
+    bench.fillStyle(0x4a4a4a, 1);
+    bench.fillRect(15, 250, 65, 10);
+    bench.fillStyle(0xc0392b, 0.5);
+    bench.fillRect(15, 250, 65, 3);
+    bench.fillStyle(0x4a4a4a, 1);
+    bench.fillRect(720, 250, 65, 10);
+    bench.fillStyle(0xc0392b, 0.5);
+    bench.fillRect(720, 250, 65, 3);
+
+    // === TRASH CANS ===
+    const trash = this.add.graphics();
+    c.add(trash);
+    trash.fillStyle(0xc0392b, 1);
+    trash.fillRoundedRect(8, 268, 22, 26, 4);
+    trash.fillStyle(0xa93226, 1);
+    trash.fillRect(8, 268, 22, 4);
+    trash.fillStyle(0xc0392b, 1);
+    trash.fillRoundedRect(770, 268, 22, 26, 4);
+    trash.fillStyle(0xa93226, 1);
+    trash.fillRect(770, 268, 22, 4);
   }
 
   palette() { return PAL[this.palIdx]; }
-
-  buildRain() {
-    if (this.rainLayer) {
-      this.rainLayer.destroy();
-      this.rainLayer = null;
-    }
-    const c = this.add.container(0, 0);
-    c.setDepth(2);
-    this.rainLayer = c;
-    const n = [24, 44, 60, 80][this.stage - 1] || 24;
-    this.rain = [];
-    for (let i = 0; i < n; i++) {
-      const g = this.add.graphics();
-      c.add(g);
-      this.rain.push({ g, x: rand(0, W), y: rand(0, H), sp: rand(180, 380) });
-    }
-  }
-
-  updateRain(dt) {
-    const n = this.rain.length;
-    for (let i = 0; i < n; i++) {
-      const r = this.rain[i];
-      r.y += r.sp * dt;
-      r.x -= r.sp * 0.28 * dt;
-      if (r.y > H) { r.y = -8; r.x = rand(0, W); }
-      if (r.x < -4) r.x = W + 4;
-      r.g.clear();
-      const rc = this.palette().rain;
-      r.g.fillStyle(rc, 0.5);
-      r.g.fillRect(r.x, r.y, 2, 9);
-    }
-  }
 
   // ---- Player ---------------------------------------------------------------
   buildPlayerTextures() {
     for (const st of ['stand', 'crouch', 'jump']) {
       const g = this.add.graphics();
       drawPlayer(g, { state: st, stretch: 1 });
-      g.generateTexture('p_' + st, 48, 56);
+      g.generateTexture('p_' + st, 80, 100);
       g.destroy();
     }
   }
@@ -716,15 +787,15 @@ class GameScene extends Phaser.Scene {
     p.vy = 0;
     p.grounded = true;
     p.invuln = 0;
-    p.shadow = this.add.ellipse(90, PLAYER_Y + 26, 40, 10, 0x000000, 0.4);
+    p.shadow = this.add.ellipse(90, PLAYER_Y + 48, 60, 14, 0x000000, 0.4);
     p.shadow.setDepth(9);
   }
 
   playerBox() {
     const p = this.player;
-    if (p.state === 'jump') return { x: p.x, y: p.y - 20, w: 26, h: 44 };
-    if (p.state === 'crouch') return { x: p.x, y: p.y - 8, w: 26, h: 24 };
-    return { x: p.x, y: p.y - 20, w: 26, h: 44 };
+    if (p.state === 'jump') return { x: p.x, y: p.y - 30, w: 50, h: 70 };
+    if (p.state === 'crouch') return { x: p.x, y: p.y - 15, w: 50, h: 40 };
+    return { x: p.x, y: p.y - 30, w: 50, h: 70 };
   }
 
   updatePlayer(dt) {
@@ -734,8 +805,14 @@ class GameScene extends Phaser.Scene {
     this.dx = (right ? 1 : 0) - (left ? 1 : 0);
     const wantJump = INPUT.held('P1_1');
     const wantCrouch = INPUT.held('P1_2');
-    if (INPUT.pressed('P1_U') && p.lane > 0) { p.lane--; AUDIO.lane(); }
-    if (INPUT.pressed('P1_D') && p.lane < LANES.length - 1) { p.lane++; AUDIO.lane(); }
+    if (INPUT.pressed('P1_U') && p.lane > 0) {
+      p.lane--; AUDIO.lane();
+      this.burst(p.x, p.y + 45, 2, 0x999988);
+    }
+    if (INPUT.pressed('P1_D') && p.lane < LANES.length - 1) {
+      p.lane++; AUDIO.lane();
+      this.burst(p.x, p.y + 45, 2, 0x999988);
+    }
     const laneY = LANES[p.lane];
     if (p.grounded) {
       p.y = lerp(p.y, laneY, Math.min(1, 12 * dt));
@@ -743,7 +820,10 @@ class GameScene extends Phaser.Scene {
     } else {
       p.vy += 1500 * dt;
       p.y += p.vy * dt;
-      if (p.y >= laneY) { p.y = laneY; p.vy = 0; p.grounded = true; }
+      if (p.y >= laneY) {
+        p.y = laneY; p.vy = 0; p.grounded = true;
+        this.burst(p.x, p.y + 45, 4, 0x999988);
+      }
     }
     const prevState = p.state;
     if (!p.grounded) p.state = 'jump';
@@ -758,14 +838,14 @@ class GameScene extends Phaser.Scene {
     const stretch = p.state === 'jump' ? 0.75 : 1;
     p.setTexture('p_' + p.state);
     p.setScale(stretch, stretch);
-    p.x = clamp(p.x + this.dx * 260 * dt, 40, W - 40);
+    p.x = clamp(p.x + this.dx * 260 * dt, 50, W - 50);
     if (p.invuln > 0) {
       p.invuln -= dt;
       const a = 0.4 + 0.4 * Math.abs(Math.sin(this.time.now * 0.05));
       p.setAlpha(a);
       if (p.invuln <= 0) p.setAlpha(1);
     }
-    p.shadow.setPosition(p.x, LANES[p.lane] + 26);
+    p.shadow.setPosition(p.x, LANES[p.lane] + 48);
     const sc = p.state === 'jump' ? 0.7 : 1;
     p.shadow.setScale(sc, 1);
   }
@@ -780,64 +860,33 @@ class GameScene extends Phaser.Scene {
       roll -= e.w;
       if (roll <= 0) return e.t;
     }
-    return 'car';
+    return 'police';
   }
 
   spawnObstacle() {
     const stage = this.stage;
-    let type = this.pickType();
-    if (type === 'static') type = STATIC_TYPES[Math.floor(Math.random() * STATIC_TYPES.length)];
+    const type = this.pickType();
     if (this.obstacles.length >= 13) return;
-    if (stage === 1 && type === 'ghost') type = 'carMid';
-    if (stage === 1 && type === 'truckNear') type = 'bar';
-    if (type === 'truck' && stage === 1) {
-      for (const o of this.obstacles) {
-        if (o.type === 'truck' && o.x > W - 260) return;
-      }
-    }
-    let x = W + 100;
-    if (type === 'truck') x = W + 120;
-    if (type === 'ghost') x = W + 120;
-    if (type === 'static') {
-      const cols = STATIC_COLS.slice();
-      const p = this.player;
-      for (let i = cols.length - 1; i >= 0; i--) {
-        const busy = this.worldParts.cols[i];
-        if (busy.until > this.time.now) { cols.splice(i, 1); continue; }
-        if (Math.abs(cols[i] - p.x) < 110) { cols.splice(i, 1); }
-      }
-      if (cols.length === 0) return;
-      const ci = Math.floor(Math.random() * cols.length);
-      const cx = cols[ci];
-      x = cx;
-      const busy = this.worldParts.cols.find((c) => c.x === cx);
-      if (!busy) return;
-      busy.busy = 1;
-      busy.until = this.time.now + 4500;
-    }
+
     const def = OBS[type];
     const spMul = STAGE_SPEED_MUL[stage - 1] || 1;
-    const speed = type === 'static' ? 0 : (def.sp || 170) * spMul + this.elapsed * 0.006;
-    let oy = def.y;
-    if (type === 'static') {
-      oy = Math.random() < 0.6 ? LANES[this.player.lane] : LANES[Math.floor(Math.random() * LANES.length)];
-    }
+    const speed = (def.sp || 170) * spMul + this.elapsed * 0.006;
+
+    const laneIdx = Math.floor(Math.random() * LANES.length);
+    const oy = LANES[laneIdx];
+
     const o = {
-      type, x, y: oy, w: def.w, h: def.h,
-      hit: def.hit !== false, sp: speed, seed: Math.floor(Math.random() * CARS.length),
-      life: type === 'static' ? 4.5 : 0, armed: type === 'static' ? 0.5 : 0,
-      arm: 0.5, blinkT: 0
+      type, x: W + 100, y: oy, w: def.w, h: def.h,
+      hit: true, sp: speed, seed: Math.floor(Math.random() * 100),
+      life: 0, armed: 0, arm: 0, blinkT: 0
     };
-    if (type === 'static') o.life = 4.5;
+
     this.obstacles.push(o);
     const g = this.add.graphics();
     g.setDepth(5);
     drawObstacle(g, o);
     o.g = g;
     o.bg = null;
-    if (type === 'ghost') {
-      g.setAlpha(0.55);
-    }
   }
 
   updateSpawn(dt) {
@@ -857,42 +906,13 @@ class GameScene extends Phaser.Scene {
     const p = this.player;
     for (let i = this.obstacles.length - 1; i >= 0; i--) {
       const o = this.obstacles[i];
-      if (o.type === 'static') {
-        const gone = o.life <= 0;
-        if (gone) {
-          this.obstacles.splice(i, 1);
-          o.g.destroy();
-          for (const busy of this.worldParts.cols) {
-            if (busy.x === o.x) {
-              busy.busy = 0;
-              busy.until = 0;
-            }
-          }
-          continue;
-        }
-        o.life -= dt;
-        o.arm -= dt;
-        if (o.arm > 0 || o.life < 0.9) {
-          o.blinkT -= dt;
-          if (o.blinkT <= 0) {
-            o.blinkT = 0.1;
-            o.g.setVisible(!o.g.visible);
-          }
-        } else if (!o.g.visible) {
-          o.g.setVisible(true);
-        }
-      } else {
-        o.x -= o.sp * dt;
-        if (o.x + o.w / 2 < -40) {
-          this.obstacles.splice(i, 1);
-          o.g.destroy();
-          continue;
-        }
+      o.x -= o.sp * dt;
+      if (o.x + o.w / 2 < -40) {
+        this.obstacles.splice(i, 1);
+        o.g.destroy();
+        continue;
       }
       o.g.setPosition(o.x, o.y);
-      if (o.type === 'car' || o.type === 'carMid' || o.type === 'ghost') {
-        o.g.setScale(1, 1);
-      }
       if (this.screen === 'play' && this.playing) {
         this.checkCollision(o);
         this.checkNearMiss(o);
@@ -903,9 +923,7 @@ class GameScene extends Phaser.Scene {
   checkCollision(o) {
     const p = this.player;
     if (p.invuln > 0) return;
-    if (o.type === 'static' && o.arm > 0) return;
-    if (!o.hit) return;
-    if (Math.abs(o.y - LANES[p.lane]) > 45) return;  // only collide within player's lane
+    if (Math.abs(o.y - LANES[p.lane]) > 45) return;
     const pb = this.playerBox();
     if (overlap(pb, o)) {
       this.hit();
@@ -913,7 +931,6 @@ class GameScene extends Phaser.Scene {
   }
 
   checkNearMiss(o) {
-    if (o.type === 'static' || o.type === 'bar' || o.type === 'truck' || o.type === 'truckNear') return;
     const p = this.player;
     if (!o.scored && o.x + o.w / 2 < p.x) {
       o.scored = true;
@@ -1069,7 +1086,7 @@ class GameScene extends Phaser.Scene {
     const t2 = this.add.text(W / 2, 186, 'EL ÚLTIMO TRANSMÍ', {
       fontFamily: 'monospace', fontSize: '24px', color: '#8fc9f2', fontStyle: 'bold', letterSpacing: 2
     }).setOrigin(0.5).setDepth(56);
-    const t3 = this.add.text(W / 2, 250, 'Cambiá de carril con el joystick,\nesquivá el tráfico, saltá los\ncharcos, agachate bajo los letreros\ny subite al bus antes de la medianoche.', {
+    const t3 = this.add.text(W / 2, 250, 'Corré por la estación de TransMilenio.\nCambiá de carril, saltá y agachate\npara esquivar a los personajes\ny alcanzar el último bus.', {
       fontFamily: 'monospace', fontSize: '15px', color: '#c5ccd8', align: 'center', lineSpacing: 6
     }).setOrigin(0.5).setDepth(56);
     const t4 = this.add.text(W / 2, 430, 'JOYSTICK  •  W/S: CARRIL  •  U: SALTAR  •  I: AGACHARSE', {
@@ -1147,7 +1164,6 @@ class GameScene extends Phaser.Scene {
     this.lerpT = 0;
     if (this.busG) { this.busG.destroy(); this.busG = null; this.bus = null; }
     this.drawCity(0);
-    this.buildRain();
     const titles = [
       'ETAPA 1: ÚLTIMO TURNO',
       'ETAPA 2: NOCHES DE NEÓN',
@@ -1214,7 +1230,7 @@ class GameScene extends Phaser.Scene {
     this.player.setAlpha(1);
     this.player.setScale(1, 1);
     this.player.shadow.setScale(1, 1);
-    this.player.shadow.setPosition(90, LANES[2] + 26);
+    this.player.shadow.setPosition(90, LANES[2] + 48);
     this.boarding = true;
     this.showBanner('SUBIENDO AL BUS', 1500);
   }
@@ -1225,7 +1241,7 @@ class GameScene extends Phaser.Scene {
     if (!this.boarding) return;
     if (Math.abs(p.x - doorX) > 8) {
       p.x += Math.sign(doorX - p.x) * 130 * dt;
-      p.shadow.setPosition(p.x, LANES[p.lane] + 26);
+      p.shadow.setPosition(p.x, LANES[p.lane] + 48);
     } else {
       this.boarding = false;
       this.enterBus();
@@ -1256,7 +1272,7 @@ class GameScene extends Phaser.Scene {
         this.player.grounded = true;
         this.player.setAlpha(1);
         this.player.setScale(1, 1);
-        this.player.shadow.setPosition(90, LANES[2] + 26);
+        this.player.shadow.setPosition(90, LANES[2] + 48);
         this.player.shadow.setScale(1, 1);
         this.countT = 2.5;
         this.screen = 'count';
@@ -1421,7 +1437,6 @@ class GameScene extends Phaser.Scene {
     });
   }
 
-  // ---- Input handling for screens ---------------------------------------------
   handleTitleInput() {
     if (INPUT.pressed('START1') || INPUT.pressed('START2') || INPUT.pressed('P1_1')) {
       if (!this.initAudio) {
@@ -1472,7 +1487,7 @@ class GameScene extends Phaser.Scene {
     let dt = delta / 1000;
     if (dt > 0.05) dt = 0.05;
     if (dt < 0) dt = 0;
-    this.updateRain(dt);
+    // Rain disabled - indoor station
     this.updateParts(dt);
     if (this.screen === 'title') {
       this.handleTitleInput();
@@ -1551,7 +1566,7 @@ class GameScene extends Phaser.Scene {
     p.y = lerp(p.y, LANES[p.lane], Math.min(1, 12 * 0.016));
     p.setTexture('p_' + (wantJump ? 'jump' : (wantCrouch ? 'crouch' : 'stand')));
     p.setScale(1, 1);
-    p.shadow.setPosition(p.x, LANES[p.lane] + 26);
+    p.shadow.setPosition(p.x, LANES[p.lane] + 48);
     p.shadow.setScale(1, 1);
   }
 }
@@ -1570,6 +1585,3 @@ const config = {
   scene: [GameScene]
 };
 window.__portal1159Game = new Phaser.Game(config);
-
-
-
