@@ -1,6 +1,6 @@
 // PORTAL 11:59 — El Último Transmi
 // Platanus Hack 26 — Colombia Arcade
-// Single-player horizontal lane-dodge at a Bogotá TransMilenio station.
+// 1/2-player horizontal lane-dodge at a Bogotá TransMilenio station.
 // Editable surface (HARD INVARIANT): game.js, metadata.json, cover.png ONLY.
 
 'use strict';
@@ -14,6 +14,8 @@ const STORAGE_KEY = 'portal-11:59:lb:v2';
 const STAGE_TIME = [45, 40, 35, 30];
 const STAGE_DIFFICULTY = [[1200, 600], [900, 450], [700, 350], [500, 250]];
 const STAGE_SPEED_MUL = [0.8, 1.0, 1.2, 1.4];
+const MAX_OBSTACLES = 10;
+const MAX_OBSTACLE_SPEED = 285;
 const PLAYER_Y = 540;
 const LANES = [260, 330, 400, 470, 540];
 const CARS = [0xe74c3c, 0x2c5fa6, 0xf1c40f, 0x8e44ad, 0x16a085];
@@ -59,24 +61,31 @@ const OBS = {
   vendor:    { w: 90,  h: 100, sp: 140 },
   singer:    { w: 80,  h: 100, sp: 160 },
   kid:       { w: 60,  h: 75,  sp: 220 },
-  student:   { w: 85,  h: 100, sp: 130 }
+  student:   { w: 85,  h: 100, sp: 130 },
+  businessman: { w: 80,  h: 100, sp: 150 },
+  tourist:   { w: 85,  h: 100, sp: 120 },
+  guard:     { w: 80,  h: 100, sp: 160 }
 };
 const SPAWN = [
   [
-    { t: 'police', w: 25 }, { t: 'vendor', w: 25 }, { t: 'singer', w: 20 },
-    { t: 'kid', w: 15 }, { t: 'student', w: 15 }
+    { t: 'police', w: 15 }, { t: 'vendor', w: 15 }, { t: 'singer', w: 10 },
+    { t: 'kid', w: 10 }, { t: 'student', w: 10 },
+    { t: 'businessman', w: 15 }, { t: 'tourist', w: 10 }, { t: 'guard', w: 10 }
   ],
   [
-    { t: 'police', w: 22 }, { t: 'vendor', w: 22 }, { t: 'singer', w: 20 },
-    { t: 'kid', w: 20 }, { t: 'student', w: 16 }
+    { t: 'police', w: 13 }, { t: 'vendor', w: 13 }, { t: 'singer', w: 11 },
+    { t: 'kid', w: 12 }, { t: 'student', w: 9 },
+    { t: 'businessman', w: 18 }, { t: 'tourist', w: 12 }, { t: 'guard', w: 12 }
   ],
   [
-    { t: 'police', w: 20 }, { t: 'vendor', w: 20 }, { t: 'singer', w: 20 },
-    { t: 'kid', w: 25 }, { t: 'student', w: 15 }
+    { t: 'police', w: 11 }, { t: 'vendor', w: 11 }, { t: 'singer', w: 11 },
+    { t: 'kid', w: 14 }, { t: 'student', w: 8 },
+    { t: 'businessman', w: 15 }, { t: 'tourist', w: 15 }, { t: 'guard', w: 15 }
   ],
   [
-    { t: 'police', w: 20 }, { t: 'vendor', w: 18 }, { t: 'singer', w: 18 },
-    { t: 'kid', w: 28 }, { t: 'student', w: 16 }
+    { t: 'police', w: 10 }, { t: 'vendor', w: 9 }, { t: 'singer', w: 9 },
+    { t: 'kid', w: 15 }, { t: 'student', w: 9 },
+    { t: 'businessman', w: 12 }, { t: 'tourist', w: 18 }, { t: 'guard', w: 18 }
   ]
 ];
 
@@ -99,7 +108,6 @@ function lerpColor(c0, c1, t) {
   const b = (c0 & 255) + (((c1 & 255) - (c0 & 255)) * t);
   return (Math.round(r) << 16) | (Math.round(gr) << 8) | Math.round(b);
 }
-
 // ---------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------
@@ -189,35 +197,153 @@ const AUDIO = {
 // Music
 // ---------------------------------------------------------------------------
 const MUSIC = {
-  step: 125,
-  _pos: 0, _stage: 1, _mute: 0, t: null,
-  S: [
-    { l: [294,0,349,0, 440,440,0,587, 523,0,440,0, 349,0,392,440, 0,349,0,294, 0,0,330,349],
-      b: [147,147,147,147, 117,117,117,117, 175,175,175,175, 131,131,131,131, 147,147,147,147, 117,117,131,131] },
-    { l: [349,0,440,349, 440,0,523,0, 349,0,440,587, 659,0,523,440, 440,0,440,349, 392,0,349,0],
-      b: [87,87,87,87, 131,131,131,131, 87,87,87,87, 175,175,175,175, 131,131,131,131, 98,98,98,98] },
-    { l: [440,0,587,440, 659,0,587,0, 440,523,659,0, 784,0,659,587, 523,0,587,440, 0,440,0,523],
-      b: [110,110,110,110, 131,131,131,131, 147,147,147,147, 110,110,110,110, 165,165,165,165, 110,110,110,110] },
-    { l: [262,0,330,392, 523,0,392,330, 392,0,494,0, 587,0,494,330, 392,0,330,0, 262,196,262,0],
-      b: [131,131,131,131, 98,98,98,98, 131,131,131,131, 196,196,196,196, 131,131,131,131, 87,87,87,87] }
+  baseBpm: 170, maxBpm: 260, currentBpm: 170,
+  playing: false, _timer: null, _step: 0, _stage: 1, _mute: 0, _pat: null, _bass: null, _stab: null, _run: 0,
+  P: [
+    '1000100010001000|0010001000100010|0000100000001000|1000000000001000',
+    '1000101010001010|0010001000100010|0000100000001010|1000000010000000',
+    '1000101010101010|1010101010101010|0000101000001010|1000000010001000',
+    '1010101010101010|1010101010101010|0000101000101010|1000100010001000'
   ],
-  play(stage) {
-    if (stage && this._stage !== stage) {
-      this._stage = Math.min(4, Math.max(1, stage | 0));
-      this._pos = 0;
+  B: ['1151153151153151', '1152353151235153', '2252354252352542', '3353465353465653'],
+  X: ['0001000100010001', '0010010000100100', '0010011000100110', '0101011001010110'],
+  distCurve: null,
+  init() {
+    if (this.distCurve) return;
+    const c = new Float32Array(256);
+    for (let i = 0; i < 256; i++) {
+      const x = (i * 2) / 256 - 1;
+      c[i] = (Math.PI + 100) * x / (Math.PI + 100 * Math.abs(x));
     }
-    if (this.t) return;
-    this.t = setInterval(() => {
-      if (performance.now() < this._mute) { this._pos = (this._pos + 1) % 24; return; }
-      const tr = this.S[this._stage - 1] || this.S[0];
-      const lf = tr.l[this._pos], bf = tr.b[this._pos];
-      if (lf) AUDIO.tone('square', lf, lf, 0.11, 0.05);
-      if (bf) AUDIO.tone('square', bf, bf, 0.11, 0.04);
-      this._pos = (this._pos + 1) % 24;
-    }, this.step);
+    this.distCurve = c;
+  },
+  kick() {
+    try {
+      if (!AUDIO.ctx) return;
+      const c = AUDIO.ctx, t = c.currentTime;
+      const o = c.createOscillator(), g = c.createGain(), ws = c.createWaveShaper();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(160, t);
+      o.frequency.exponentialRampToValueAtTime(40, t + 0.3);
+      ws.curve = this.distCurve;
+      g.gain.setValueAtTime(0.7, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      o.connect(ws); ws.connect(g); g.connect(c.destination);
+      o.start(t); o.stop(t + 0.35);
+    } catch (e) {}
+  },
+  hihat() {
+    try {
+      if (!AUDIO.ctx) return;
+      const c = AUDIO.ctx, t = c.currentTime;
+      const len = Math.floor(c.sampleRate * 0.04);
+      const buf = c.createBuffer(1, len, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      const s = c.createBufferSource();
+      s.buffer = buf;
+      const f = c.createBiquadFilter();
+      f.type = 'highpass'; f.frequency.value = 7000;
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.25, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+      s.connect(f); f.connect(g); g.connect(c.destination);
+      s.start(t);
+    } catch (e) {}
+  },
+  snare() {
+    try {
+      if (!AUDIO.ctx) return;
+      const c = AUDIO.ctx, t = c.currentTime;
+      const len = Math.floor(c.sampleRate * 0.12);
+      const buf = c.createBuffer(1, len, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      const ns = c.createBufferSource();
+      ns.buffer = buf;
+      const bf = c.createBiquadFilter();
+      bf.type = 'bandpass'; bf.frequency.value = 3000;
+      const ng = c.createGain();
+      ng.gain.setValueAtTime(0.35, t);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      ns.connect(bf); bf.connect(ng); ng.connect(c.destination);
+      ns.start(t);
+      const o = c.createOscillator();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(180, t);
+      o.frequency.exponentialRampToValueAtTime(60, t + 0.1);
+      const og = c.createGain();
+      og.gain.setValueAtTime(0.3, t);
+      og.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+      o.connect(og); og.connect(c.destination);
+      o.start(t); o.stop(t + 0.15);
+    } catch (e) {}
+  },
+  hoover() {
+    try {
+      if (!AUDIO.ctx) return;
+      const c = AUDIO.ctx, t = c.currentTime;
+      const freqs = [110, 138.6, 164.8];
+      for (let i = 0; i < 3; i++) {
+        const o = c.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(freqs[i], t);
+        if (i > 0) o.detune.setValueAtTime(i === 1 ? 8 : -8, t);
+        const g = c.createGain();
+        g.gain.setValueAtTime(0.08, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        o.connect(g); g.connect(c.destination);
+        o.start(t); o.stop(t + 0.25);
+      }
+    } catch (e) {}
+  },
+  bass(f) { AUDIO.tone('sawtooth', f, f * 0.84, 0.13, 0.055); },
+  stab(f) { AUDIO.tone('square', f, f * 0.62, 0.045, 0.045); },
+  tick() {
+    if (!this.playing) return;
+    if (this._mute && performance.now() < this._mute) {
+      this._step = (this._step + 1) % 16;
+      return;
+    }
+    const p = this._pat || this.P[0].split('|');
+    if (p[0][this._step] === '1') this.kick();
+    if (p[1][this._step] === '1') this.hihat();
+    if (p[2][this._step] === '1') this.snare();
+    if (p[3][this._step] === '1') this.hoover();
+    const bass = this._bass && +this._bass[this._step];
+    if (bass) this.bass(42 + bass * 9 + this._stage * 3);
+    if (this._stab && this._stab[this._step] === '1') this.stab(340 + this._stage * 42);
+    this._step = (this._step + 1) % 16;
+  },
+  play(stage) {
+    this.stop();
+    this.init();
+    if (stage) this._stage = clamp(stage, 1, 4);
+    this.currentBpm = [172, 196, 224, 252][this._stage - 1];
+    this._pat = this.P[this._stage - 1].split('|');
+    this._bass = this.B[this._stage - 1];
+    this._stab = this.X[this._stage - 1];
+    this.playing = true;
+    this._step = 0;
+    const iv = 60000 / this.currentBpm / 4;
+    const run = ++this._run;
+    this._timer = setInterval(() => { if (run === this._run) this.tick(); }, iv);
+  },
+  loseLife() {
+    this.duck(300);
   },
   duck(ms) { this._mute = performance.now() + ms; },
-  stop() { if (this.t) clearInterval(this.t); this.t = null; this._pos = 0; this._stage = 1; }
+  stop() {
+    if (this._timer) clearInterval(this._timer);
+    this._timer = null;
+    this._step = 0;
+    this._pat = this._bass = this._stab = null;
+    this._mute = 0;
+    this._stage = 1;
+    this.playing = false;
+    this.currentBpm = this.baseBpm;
+    this._run++;
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -280,19 +406,18 @@ const STORAGE = (() => {
 // ---------------------------------------------------------------------------
 // Procedural drawing — Player (80×100 texture)
 // ---------------------------------------------------------------------------
-function drawPlayer(g, o) {
+function drawPlayer(g, o, shirtColor) {
   g.clear();
   const crouched = o.state === 'crouch';
   const jumping = o.state === 'jump';
   const skin = 0xf3c39a;
   const hair = 0x2c3e50;
-  const shirt = 0xf4c95d;
-  const shirtB = 0xd4a93a;
+  const shirt = shirtColor || 0xf4c95d;
+  const shirtB = shirt === 0xf4c95d ? 0xd4a93a : (shirt === 0x3498db ? 0x2980b9 : shirt);
   const pants = 0x2c3e50;
 
   g.fillStyle(0x000000, 0.35);
   g.fillEllipse(40, 92, 50, 12);
-
   if (crouched) {
     g.fillStyle(pants, 1);
     g.fillRect(20, 85, 14, 7);
@@ -505,6 +630,88 @@ function drawObstacle(g, o) {
     g.fillRect(3, -hh * 0.47, 6, 5);
     g.fillStyle(0x2c3e50, 1);
     g.fillRoundedRect(-13, -hh * 0.65, 26, 10, 4);
+
+  } else if (t === 'businessman') {
+    g.fillStyle(0x111111, 1);
+    g.fillRect(-16, hh - 10, 12, 10);
+    g.fillRect(4, hh - 10, 12, 10);
+    g.fillStyle(0x2c3e50, 1);
+    g.fillRect(-12, hh * 0.3, 10, hh * 0.45);
+    g.fillRect(2, hh * 0.3, 10, hh * 0.45);
+    g.fillStyle(0x2c3e50, 1);
+    g.fillRoundedRect(-22, -hh * 0.35, 44, hh * 0.7, 5);
+    g.fillStyle(0xecf0f1, 1);
+    g.fillRect(-8, -hh * 0.35, 16, 10);
+    g.fillStyle(0xc0392b, 1);
+    g.fillRect(-2, -hh * 0.25, 4, hh * 0.35);
+    g.fillTriangle(-4, -hh * 0.25 + hh * 0.35, 4, -hh * 0.25 + hh * 0.35, 0, -hh * 0.25 + hh * 0.35 + 8);
+    g.fillStyle(0x5d4e37, 1);
+    g.fillRoundedRect(14, -hh * 0.05, 16, 22, 3);
+    g.fillRect(18, -hh * 0.15, 8, 6);
+    g.fillStyle(0xf3c39a, 1);
+    g.fillCircle(0, -hh * 0.55, 12);
+    g.fillStyle(0x2c3e50, 1);
+    g.fillRoundedRect(-12, -hh * 0.72, 24, 12, 4);
+    g.fillStyle(0x1f1f28, 1);
+    g.fillCircle(-4, -hh * 0.55, 2);
+    g.fillCircle(4, -hh * 0.55, 2);
+
+  } else if (t === 'tourist') {
+    g.fillStyle(0x8B7355, 1);
+    g.fillRect(-14, hh - 10, 12, 10);
+    g.fillRect(2, hh - 10, 12, 10);
+    g.fillStyle(0x7d6b5d, 1);
+    g.fillRect(-10, hh * 0.3, 8, hh * 0.4);
+    g.fillRect(2, hh * 0.3, 8, hh * 0.4);
+    g.fillStyle(0xe67e22, 1);
+    g.fillRoundedRect(-20, -hh * 0.25, 40, hh * 0.6, 5);
+    g.fillStyle(0xf39c12, 1);
+    for (let px = -16; px < 16; px += 8) {
+      g.fillRect(px, -hh * 0.15, 4, 4);
+      g.fillRect(px + 4, -hh * 0.05, 4, 4);
+    }
+    g.fillStyle(0x3498db, 1);
+    g.fillRoundedRect(16, hh * 0.0, 14, hh * 0.4, 3);
+    g.fillRect(22, hh * 0.3, 3, hh * 0.15);
+    g.fillStyle(0xf4c95d, 1);
+    g.fillEllipse(0, -hh * 0.78, 32, 10);
+    g.fillRoundedRect(-10, -hh * 0.85, 20, 6, 3);
+    g.fillStyle(0xf3c39a, 1);
+    g.fillCircle(0, -hh * 0.55, 12);
+    g.fillStyle(0x333333, 1);
+    g.fillRect(-8, -hh * 0.58, 16, 3);
+    g.fillStyle(0x1f1f28, 1);
+    g.fillCircle(-4, -hh * 0.55, 2);
+    g.fillCircle(4, -hh * 0.55, 2);
+
+  } else if (t === 'guard') {
+    g.fillStyle(0x111111, 1);
+    g.fillRect(-16, hh - 10, 12, 10);
+    g.fillRect(4, hh - 10, 12, 10);
+    g.fillStyle(0x0d0d1a, 1);
+    g.fillRect(-12, hh * 0.3, 10, hh * 0.45);
+    g.fillRect(2, hh * 0.3, 10, hh * 0.45);
+    g.fillStyle(0x1a1a2e, 1);
+    g.fillRoundedRect(-22, -hh * 0.35, 44, hh * 0.7, 5);
+    g.fillStyle(0xf4c95d, 1);
+    g.fillCircle(-14, -hh * 0.2, 4);
+    g.fillStyle(0x333333, 1);
+    g.fillRoundedRect(-8, -hh * 0.15, 16, 10, 2);
+    g.fillStyle(0xf4c95d, 1);
+    g.fillRect(-4, -hh * 0.1, 8, 3);
+    g.fillStyle(0x555555, 1);
+    g.fillRect(18, -hh * 0.3, 4, hh * 0.4);
+    g.fillStyle(0xf4c95d, 0.6);
+    g.fillCircle(20, -hh * 0.5, 12);
+    g.fillStyle(0x444444, 1);
+    g.fillRect(16, -hh * 0.45, 8, 6);
+    g.fillStyle(0xf3c39a, 1);
+    g.fillCircle(0, -hh * 0.55, 12);
+    g.fillStyle(0x1a1a2e, 1);
+    g.fillRoundedRect(-14, -hh * 0.72, 28, 10, 3);
+    g.fillStyle(0x1f1f28, 1);
+    g.fillCircle(-4, -hh * 0.55, 2);
+    g.fillCircle(4, -hh * 0.55, 2);
   }
 }
 
@@ -516,12 +723,16 @@ class GameScene extends Phaser.Scene {
 
   create() {
     this.stage = 1;
+    this.playerMode = 1;
     this.playing = false;
     this.screen = 'title';
     this.timeScale = 0;
     this.elapsed = 0;
     this.score = 0;
-    this.lives = 3;
+    this.p1Lives = 3;
+    this.p2Lives = 3;
+    this.recoveryTimer = 0;
+    this.threatLevel = 0;
     this.counted = {};
     this.obstacles = [];
     this.parts = [];
@@ -546,7 +757,9 @@ class GameScene extends Phaser.Scene {
     this.buildWorld();
     this.buildPlayerTextures();
     this.buildPlayer();
+    this.buildPlayer2();
     this.buildHUD();
+    this.syncModeVisibility();
     this.buildBanner();
     this.drawHearts();
 
@@ -764,6 +977,7 @@ class GameScene extends Phaser.Scene {
     trash.fillRoundedRect(770, 268, 22, 26, 4);
     trash.fillStyle(0xa93226, 1);
     trash.fillRect(770, 268, 22, 4);
+
   }
 
   palette() { return PAL[this.palIdx]; }
@@ -772,8 +986,14 @@ class GameScene extends Phaser.Scene {
   buildPlayerTextures() {
     for (const st of ['stand', 'crouch', 'jump']) {
       const g = this.add.graphics();
-      drawPlayer(g, { state: st, stretch: 1 });
+      drawPlayer(g, { state: st, stretch: 1 }, 0xf4c95d);
       g.generateTexture('p_' + st, 80, 100);
+      g.destroy();
+    }
+    for (const st of ['stand', 'crouch', 'jump']) {
+      const g = this.add.graphics();
+      drawPlayer(g, { state: st, stretch: 1 }, 0x3498db);
+      g.generateTexture('p2_' + st, 80, 100);
       g.destroy();
     }
   }
@@ -787,29 +1007,76 @@ class GameScene extends Phaser.Scene {
     p.vy = 0;
     p.grounded = true;
     p.invuln = 0;
+    p.id = 1;
+    p.lives = 3;
+    p.alive = true;
+    p.streak = 0;
+    p.hitRecovery = 0;
     p.shadow = this.add.ellipse(90, PLAYER_Y + 48, 60, 14, 0x000000, 0.4);
     p.shadow.setDepth(9);
   }
 
-  playerBox() {
-    const p = this.player;
+  buildPlayer2() {
+    this.player2 = this.physics.add.existing(this.add.sprite(160, PLAYER_Y, 'p2_stand'), false);
+    const p = this.player2;
+    p.setDepth(10);
+    p.state = 'stand';
+    p.lane = 2;
+    p.vy = 0;
+    p.grounded = true;
+    p.invuln = 0;
+    p.id = 2;
+    p.lives = 0;
+    p.alive = false;
+    p.streak = 0;
+    p.hitRecovery = 0;
+    p.shadow = this.add.ellipse(160, PLAYER_Y + 48, 60, 14, 0x000000, 0.4);
+    p.shadow.setDepth(9);
+    p.setVisible(false);
+    p.shadow.setVisible(false);
+  }
+
+  playerBox(p) {
     if (p.state === 'jump') return { x: p.x, y: p.y - 30, w: 50, h: 70 };
     if (p.state === 'crouch') return { x: p.x, y: p.y - 15, w: 50, h: 40 };
     return { x: p.x, y: p.y - 30, w: 50, h: 70 };
   }
 
-  updatePlayer(dt) {
-    const p = this.player;
-    const right = INPUT.held('P1_R');
-    const left = INPUT.held('P1_L');
-    this.dx = (right ? 1 : 0) - (left ? 1 : 0);
-    const wantJump = INPUT.held('P1_1');
-    const wantCrouch = INPUT.held('P1_2');
-    if (INPUT.pressed('P1_U') && p.lane > 0) {
+  setPlayerVisible(p, visible) {
+    if (!p) return;
+    p.setVisible(visible);
+    p.shadow.setVisible(visible);
+    const label = p.id === 1 ? this.p1Label : this.p2Label;
+    if (label) label.setVisible(visible);
+  }
+
+  syncModeVisibility() {
+    const two = this.playerMode === 2;
+    this.setPlayerVisible(this.player, this.player.alive);
+    this.setPlayerVisible(this.player2, two && this.player2.alive);
+    if (this.p2Hud) for (const el of this.p2Hud) el.setVisible(two);
+  }
+
+  alivePlayers() {
+    const list = this.player.alive ? [this.player] : [];
+    if (this.playerMode === 2 && this.player2.alive) list.push(this.player2);
+    return list;
+  }
+
+  updateOnePlayer(dt, p, n) {
+    if (!p || !p.alive) return;
+    const pre = n === 1 ? 'P1_' : 'P2_';
+    const right = INPUT.held(pre + 'R');
+    const left = INPUT.held(pre + 'L');
+    const dx = (right ? 1 : 0) - (left ? 1 : 0);
+    const wantJump = INPUT.held(pre + '1');
+    const wantCrouch = INPUT.held(pre + '2');
+    if (p.hitRecovery > 0) p.hitRecovery -= dt;
+    if (INPUT.pressed(pre + 'U') && p.lane > 0) {
       p.lane--; AUDIO.lane();
       this.burst(p.x, p.y + 45, 2, 0x999988);
     }
-    if (INPUT.pressed('P1_D') && p.lane < LANES.length - 1) {
+    if (INPUT.pressed(pre + 'D') && p.lane < LANES.length - 1) {
       p.lane++; AUDIO.lane();
       this.burst(p.x, p.y + 45, 2, 0x999988);
     }
@@ -825,7 +1092,6 @@ class GameScene extends Phaser.Scene {
         this.burst(p.x, p.y + 45, 4, 0x999988);
       }
     }
-    const prevState = p.state;
     if (!p.grounded) p.state = 'jump';
     else if (wantCrouch && !wantJump) p.state = 'crouch';
     else p.state = 'stand';
@@ -836,9 +1102,9 @@ class GameScene extends Phaser.Scene {
       AUDIO.jump();
     }
     const stretch = p.state === 'jump' ? 0.75 : 1;
-    p.setTexture('p_' + p.state);
+    p.setTexture((n === 1 ? 'p_' : 'p2_') + p.state);
     p.setScale(stretch, stretch);
-    p.x = clamp(p.x + this.dx * 260 * dt, 50, W - 50);
+    p.x = clamp(p.x + dx * 260 * dt, 50, W - 50);
     if (p.invuln > 0) {
       p.invuln -= dt;
       const a = 0.4 + 0.4 * Math.abs(Math.sin(this.time.now * 0.05));
@@ -848,6 +1114,14 @@ class GameScene extends Phaser.Scene {
     p.shadow.setPosition(p.x, LANES[p.lane] + 48);
     const sc = p.state === 'jump' ? 0.7 : 1;
     p.shadow.setScale(sc, 1);
+  }
+
+  updatePlayer(dt) {
+    this.updateOnePlayer(dt, this.player, 1);
+  }
+
+  updatePlayer2(dt) {
+    if (this.playerMode === 2) this.updateOnePlayer(dt, this.player2, 2);
   }
 
   // ---- Spawning ---------------------------------------------------------------
@@ -866,19 +1140,27 @@ class GameScene extends Phaser.Scene {
   spawnObstacle() {
     const stage = this.stage;
     const type = this.pickType();
-    if (this.obstacles.length >= 13) return;
+    if (this.obstacles.length >= MAX_OBSTACLES) return;
+    const target = this.selectTarget();
+    if (!target) return;
 
     const def = OBS[type];
     const spMul = STAGE_SPEED_MUL[stage - 1] || 1;
-    const speed = (def.sp || 170) * spMul + this.elapsed * 0.006;
-
-    const laneIdx = Math.floor(Math.random() * LANES.length);
+    const speed = Math.min(MAX_OBSTACLE_SPEED, (def.sp || 170) * spMul + this.elapsed * 0.006);
+    const r = Math.random();
+    const pattern = r < 0.48 ? 'direct' : (r < 0.8 ? 'cutoff' : 'late');
+    let laneIdx = target.lane;
+    if (pattern !== 'direct') {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      laneIdx = clamp(target.lane + side, 0, LANES.length - 1);
+    }
     const oy = LANES[laneIdx];
 
     const o = {
       type, x: W + 100, y: oy, w: def.w, h: def.h,
-      hit: true, sp: speed, seed: Math.floor(Math.random() * 100),
-      life: 0, armed: 0, arm: 0, blinkT: 0
+      hit: true, sp: speed, seed: Math.floor(Math.random() * 100), lane: laneIdx,
+      targetId: target.id, pattern, steered: pattern !== 'late', steerT: 0,
+      fromY: oy, toY: oy, near: {}
     };
 
     this.obstacles.push(o);
@@ -889,12 +1171,45 @@ class GameScene extends Phaser.Scene {
     o.bg = null;
   }
 
+  selectTarget() {
+    const all = this.alivePlayers();
+    if (!all.length) return null;
+    const ready = all.filter((p) => p.hitRecovery <= 0);
+    const pool = ready.length ? ready : all;
+    let leader = pool[0];
+    for (const p of pool) if (p.streak > leader.streak) leader = p;
+    if (pool.length > 1 && Math.random() > 0.68) return pool[Math.floor(Math.random() * pool.length)];
+    return leader;
+  }
+
+  steerObstacle(o, dt) {
+    if (o.pattern !== 'late' || o.steered || o.x > 430 || o.x < 220) return;
+    const target = this.alivePlayers().find((p) => p.id === o.targetId);
+    if (!target) return;
+    const lo = Math.max(0, o.lane - 1);
+    const hi = Math.min(LANES.length - 1, o.lane + 1);
+    o.toLane = clamp(target.lane, lo, hi);
+    o.fromY = o.y;
+    o.toY = LANES[o.toLane];
+    o.steerT = 0;
+    o.steered = true;
+  }
+
   updateSpawn(dt) {
     if (!this.playing || this.screen !== 'play') return;
+    // Breathing room after hit
+    if (this.recoveryTimer > 0) {
+      this.recoveryTimer -= dt;
+      this.spawnT = Math.max(0.5, this.spawnT - dt);
+      return;
+    }
+    // Threat level: gradually tightens spacing, capped at 1.0
+    this.threatLevel = Math.min(1.0, this.threatLevel + dt * 0.08);
+    const threatMul = 1.0 - this.threatLevel * 0.25;
     const cfg = STAGE_DIFFICULTY[this.stage - 1] || [720, 360];
     const base = cfg[0], min = cfg[1];
     const ramp = this.stage >= 4 ? 18 : this.stage === 3 ? 14 : this.stage === 2 ? 11 : 9;
-    const interval = Math.max(min, base - this.elapsed * ramp) * (0.85 + Math.random() * 0.3) / 1000;
+    const interval = Math.max(min, base - this.elapsed * ramp) * (0.85 + Math.random() * 0.3) * threatMul / 1000;
     this.spawnT -= dt;
     if (this.spawnT <= 0) {
       this.spawnT = interval;
@@ -903,9 +1218,13 @@ class GameScene extends Phaser.Scene {
   }
 
   updateObs(dt) {
-    const p = this.player;
     for (let i = this.obstacles.length - 1; i >= 0; i--) {
       const o = this.obstacles[i];
+      this.steerObstacle(o, dt);
+      if (o.steerT < 1) {
+        o.steerT = Math.min(1, o.steerT + dt * 1.6);
+        o.y = lerp(o.fromY, o.toY, easeOutCubic(o.steerT));
+      }
       o.x -= o.sp * dt;
       if (o.x + o.w / 2 < -40) {
         this.obstacles.splice(i, 1);
@@ -914,48 +1233,64 @@ class GameScene extends Phaser.Scene {
       }
       o.g.setPosition(o.x, o.y);
       if (this.screen === 'play' && this.playing) {
-        this.checkCollision(o);
-        this.checkNearMiss(o);
+        for (const p of this.alivePlayers()) {
+          this.checkCollision(o, p, this.playerBox(p));
+          this.checkNearMiss(o, p);
+        }
       }
     }
   }
 
-  checkCollision(o) {
-    const p = this.player;
-    if (p.invuln > 0) return;
+  checkCollision(o, p, pb) {
+    if (!p.alive || p.invuln > 0) return;
     if (Math.abs(o.y - LANES[p.lane]) > 45) return;
-    const pb = this.playerBox();
     if (overlap(pb, o)) {
-      this.hit();
+      this.hit(p);
     }
   }
 
-  checkNearMiss(o) {
-    const p = this.player;
-    if (!o.scored && o.x + o.w / 2 < p.x) {
-      o.scored = true;
-      const jc = p.state === 'jump' || p.state === 'crouch';
-      if (jc && Math.abs(o.y - LANES[p.lane]) < 45) {
-        this.score += 25;
-        this.scoreTextUpdate();
-        AUDIO.near();
-        this.burst(p.x, p.y, 6, 0x2ecc71);
-      }
-    }
+  checkNearMiss(o, p) {
+    if (!p.alive || o.near[p.id] || o.x + o.w / 2 >= p.x) return;
+    o.near[p.id] = true;
+    if (Math.abs(o.y - LANES[p.lane]) >= 55) return;
+    p.streak++;
+    const jc = p.state === 'jump' || p.state === 'crouch';
+    if (!jc) return;
+    this.score += 25;
+    this.scoreTextUpdate();
+    AUDIO.near();
+    this.burst(p.x, p.y, 6, 0x2ecc71);
   }
 
-  hit() {
-    const p = this.player;
-    this.lives--;
+  hit(p) {
+    if (!p.alive || p.invuln > 0) return;
+    const isP2 = (p === this.player2);
+    if (isP2) {
+      this.p2Lives--;
+      p.lives = this.p2Lives;
+    } else {
+      this.p1Lives--;
+      p.lives = this.p1Lives;
+    }
+    p.streak = 0;
+    p.hitRecovery = 1.5;
     this.drawHearts();
+    this.recoveryTimer = 1.5;
+    this.spawnT = Math.max(this.spawnT, 1.4);
+    this.threatLevel = Math.max(0, this.threatLevel - 0.4);
     MUSIC.duck(180);
+    MUSIC.loseLife();
     AUDIO.hit();
     this.cameras.main.shake(160, 0.008);
     this.flashRed();
     this.burst(p.x, p.y, 8, 0xff5577);
-    if (this.lives <= 0) {
+    if (p.lives <= 0) {
+      p.alive = false;
+      this.setPlayerVisible(p, false);
+    }
+    if (!this.alivePlayers().length) {
       this.endGame();
-    } else {
+    } else if (p.alive) {
       p.invuln = 1.2;
     }
   }
@@ -969,7 +1304,7 @@ class GameScene extends Phaser.Scene {
       g.fillStyle(col, 1);
       g.fillCircle(0, 0, 3);
       g.setPosition(x, y);
-      this.parts.push({ g, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.3, 0.7) });
+      this.parts.push({ g, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.3, 0.7) });
     }
   }
 
@@ -1002,12 +1337,24 @@ class GameScene extends Phaser.Scene {
     this.hud = this.add.container(0, 0);
     this.hud.setDepth(30);
     this.hearts = [];
+    this.p2Hearts = [];
     for (let i = 0; i < 3; i++) {
       const h = this.add.graphics();
       h.setPosition(20 + i * 40, 22);
       this.hud.add(h);
       this.hearts.push(h);
     }
+    for (let i = 0; i < 3; i++) {
+      const h = this.add.graphics();
+      h.setPosition(160 + i * 40, 22);
+      this.hud.add(h);
+      this.p2Hearts.push(h);
+    }
+    // P1/P2 indicators
+    const p1Ind = this.add.text(8, 8, 'P1', { fontFamily: 'monospace', fontSize: '11px', color: '#f4c95d', fontStyle: 'bold' });
+    this.hud.add(p1Ind);
+    const p2Ind = this.add.text(148, 8, 'P2', { fontFamily: 'monospace', fontSize: '11px', color: '#3498db', fontStyle: 'bold' });
+    this.hud.add(p2Ind);
     this.label = this.add.text(16, 44, 'PUNTaje'.toUpperCase(), { fontFamily: 'monospace', fontSize: '14px', color: '#aeb6c8' });
     this.hud.add(this.label);
     this.scoreText = this.add.text(16, 60, '0', { fontFamily: 'monospace', fontSize: '24px', color: '#ffffff', fontStyle: 'bold' });
@@ -1016,20 +1363,46 @@ class GameScene extends Phaser.Scene {
     this.hud.add(this.stageText);
     this.timerText = this.add.text(W - 16, 44, '', { fontFamily: 'monospace', fontSize: '14px', color: '#aeb6c8' }).setOrigin(1, 0);
     this.hud.add(this.timerText);
+    // P1/P2 labels above characters (dynamic, not in hud)
+    this.p1Label = this.add.text(90, 495, 'P1', { fontFamily: 'monospace', fontSize: '13px', color: '#f4c95d', fontStyle: 'bold' }).setOrigin(0.5);
+    this.p1Label.setDepth(30);
+    this.p2Label = this.add.text(160, 495, 'P2', { fontFamily: 'monospace', fontSize: '13px', color: '#3498db', fontStyle: 'bold' }).setOrigin(0.5);
+    this.p2Label.setDepth(30);
+    this.p2Hud = [p2Ind].concat(this.p2Hearts);
+    this.hud.setVisible(false);
   }
 
   drawHearts() {
-    for (let i = 0; i < this.hearts.length; i++) {
+    // P1 hearts (gold border)
+    for (let i = 0; i < 3; i++) {
       const h = this.hearts[i];
       h.clear();
-      if (i < this.lives) {
+      h.setPosition(20 + i * 40, 22);
+      if (i < this.p1Lives) {
         h.fillStyle(0xe74c3c, 1);
-        h.fillRoundedRect(-8, -7, 16, 14, 4);
+        h.fillRect(-8, -7, 6, 6); h.fillRect(2, -7, 6, 6);
+        h.fillRect(-10, -2, 20, 6); h.fillRect(-6, 4, 12, 5);
         h.fillStyle(0xffffff, 0.9);
         h.fillRect(-4, -3, 4, 4);
       } else {
         h.fillStyle(0x55555e, 1);
-        h.fillRoundedRect(-8, -7, 16, 14, 4);
+        h.fillRect(-8, -4, 16, 8); h.fillRect(-5, 4, 10, 4);
+      }
+    }
+    // P2 hearts (blue accent)
+    for (let i = 0; i < 3; i++) {
+      const h = this.p2Hearts[i];
+      h.clear();
+      h.setPosition(160 + i * 40, 22);
+      if (i < this.p2Lives) {
+        h.fillStyle(0x3498db, 1);
+        h.fillRect(-8, -7, 6, 6); h.fillRect(2, -7, 6, 6);
+        h.fillRect(-10, -2, 20, 6); h.fillRect(-6, 4, 12, 5);
+        h.fillStyle(0xffffff, 0.9);
+        h.fillRect(-4, -3, 4, 4);
+      } else {
+        h.fillStyle(0x55555e, 1);
+        h.fillRect(-8, -4, 16, 8); h.fillRect(-5, 4, 10, 4);
       }
     }
   }
@@ -1089,13 +1462,16 @@ class GameScene extends Phaser.Scene {
     const t3 = this.add.text(W / 2, 250, 'Corré por la estación de TransMilenio.\nCambiá de carril, saltá y agachate\npara esquivar a los personajes\ny alcanzar el último bus.', {
       fontFamily: 'monospace', fontSize: '15px', color: '#c5ccd8', align: 'center', lineSpacing: 6
     }).setOrigin(0.5).setDepth(56);
-    const t4 = this.add.text(W / 2, 430, 'JOYSTICK  •  W/S: CARRIL  •  U: SALTAR  •  I: AGACHARSE', {
-      fontFamily: 'monospace', fontSize: '15px', color: '#ffffff', fontStyle: 'bold'
+    const t4 = this.add.text(W / 2, 410, 'P1 + P2: JOYSTICK / BOTONES ARCADE', {
+      fontFamily: 'monospace', fontSize: '14px', color: '#f4c95d', fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(56);
-    const t5 = this.add.text(W / 2, 480, 'ENTER: EMPEZAR', {
+    const t4b = this.add.text(W / 2, 435, 'START1: 1 PLAYER   •   START2: 2 PLAYERS', {
+      fontFamily: 'monospace', fontSize: '14px', color: '#3498db', fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(56);
+    const t5 = this.add.text(W / 2, 480, 'START1 / START2: ELEGIR MODO', {
       fontFamily: 'monospace', fontSize: '15px', color: '#f4c95d', fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(56);
-    this.titleStuff = [g, t1, t2, t3, t4, t5];
+    this.titleStuff = [g, t1, t2, t3, t4, t4b, t5];
     this.tweens.add({
       targets: t1, alpha: 1, duration: 500, yoyo: true, repeat: -1
     });
@@ -1126,14 +1502,48 @@ class GameScene extends Phaser.Scene {
 
   startGame() {
     this.destroyTitle();
+    this.destroyTutorial();
+    this.destroyMode();
+    this.p1Lives = 3;
+    this.p2Lives = this.playerMode === 2 ? 3 : 0;
+    this.resetPlayer(this.player, 90, true);
+    this.resetPlayer(this.player2, 160, this.playerMode === 2);
+    this.recoveryTimer = 0;
+    this.threatLevel = 0;
     this.playing = true;
     this.screen = 'count';
     this.countT = 3;
     this.startDelay = 0;
     this.hud.setVisible(true);
+    this.drawHearts();
     this.stageText.setText('ETAPA 1');
     this.updateTimer();
     this.countdown();
+  }
+
+  resetPlayer(p, x, revive) {
+    if (!p) return;
+    if (revive) {
+      p.alive = true;
+      p.lives = 3;
+      p.streak = 0;
+    }
+    if (!p.alive) {
+      this.setPlayerVisible(p, false);
+      return;
+    }
+    p.setTexture(p.id === 1 ? 'p_stand' : 'p2_stand');
+    p.state = 'stand';
+    p.lane = 2;
+    p.x = x;
+    p.y = LANES[2];
+    p.vy = 0;
+    p.grounded = true;
+    p.invuln = 0;
+    p.hitRecovery = 0;
+    p.setAlpha(1);
+    p.setScale(1, 1);
+    this.setPlayerVisible(p, true);
   }
 
   countdown() {
@@ -1219,26 +1629,18 @@ class GameScene extends Phaser.Scene {
 
   boardBus() {
     this.screen = 'board';
-    this.player.setTexture('p_stand');
-    this.player.state = 'stand';
-    this.player.lane = 2;
-    this.player.x = 90;
-    this.player.y = LANES[2];
-    this.player.vy = 0;
-    this.player.grounded = true;
-    this.player.invuln = 0;
-    this.player.setAlpha(1);
-    this.player.setScale(1, 1);
-    this.player.shadow.setScale(1, 1);
-    this.player.shadow.setPosition(90, LANES[2] + 48);
+    this.resetPlayer(this.player, 90, false);
+    this.resetPlayer(this.player2, 160, false);
+    this.boardingPlayer = this.alivePlayers()[0];
+    if (!this.boardingPlayer) return this.endGame();
     this.boarding = true;
     this.showBanner('SUBIENDO AL BUS', 1500);
   }
 
   updateBoard(dt) {
-    const p = this.player;
+    const p = this.boardingPlayer;
     const doorX = this.bus.x + 121;
-    if (!this.boarding) return;
+    if (!this.boarding || !p || !p.alive) return this.endGame();
     if (Math.abs(p.x - doorX) > 8) {
       p.x += Math.sign(doorX - p.x) * 130 * dt;
       p.shadow.setPosition(p.x, LANES[p.lane] + 48);
@@ -1265,15 +1667,8 @@ class GameScene extends Phaser.Scene {
         this.setupStage(next);
         this.playing = true;
         if (this.busG) { this.busG.destroy(); this.busG = null; this.bus = null; }
-        this.player.x = 90;
-        this.player.lane = 2;
-        this.player.y = LANES[2];
-        this.player.vy = 0;
-        this.player.grounded = true;
-        this.player.setAlpha(1);
-        this.player.setScale(1, 1);
-        this.player.shadow.setPosition(90, LANES[2] + 48);
-        this.player.shadow.setScale(1, 1);
+         this.resetPlayer(this.player, 90, false);
+         this.resetPlayer(this.player2, 160, false);
         this.countT = 2.5;
         this.screen = 'count';
         this.countdown();
@@ -1329,7 +1724,7 @@ class GameScene extends Phaser.Scene {
     this.initialBg = bg;
     this.initialsStuff = [bg, t1, t2, this.initialText, this.gridText];
     this.drawGrid();
-    this.hintText = this.add.text(W / 2, 470, 'JOYSTICK: MOVER   •   U: SELECCIONAR   •   I: LISTO', {
+    this.hintText = this.add.text(W / 2, 470, 'P1_U/D/L/R: MOVER   •   P1_1: SELECCIONAR   •   P1_2: LISTO', {
       fontFamily: 'monospace', fontSize: '12px', color: '#c5ccd8'
     }).setOrigin(0.5).setDepth(62);
     this.initialsStuff.push(this.hintText);
@@ -1425,7 +1820,7 @@ class GameScene extends Phaser.Scene {
       fontFamily: 'monospace', fontSize: '18px', color: '#8fc9f2', fontStyle: 'bold'
     }).setOrigin(0.5);
     this.lb.add(t2);
-    const t3 = this.add.text(W / 2, 500, 'ENTER: VOLVER A JUGAR', {
+    const t3 = this.add.text(W / 2, 500, 'START1 / START2: VOLVER A JUGAR', {
       fontFamily: 'monospace', fontSize: '14px', color: '#c5ccd8'
     }).setOrigin(0.5);
     this.lb.add(t3);
@@ -1438,13 +1833,113 @@ class GameScene extends Phaser.Scene {
   }
 
   handleTitleInput() {
-    if (INPUT.pressed('START1') || INPUT.pressed('START2') || INPUT.pressed('P1_1')) {
+    if (INPUT.pressed('START1') || INPUT.pressed('START2')) {
       if (!this.initAudio) {
         this.initAudio = true;
         AUDIO.init();
       }
+      this.enterModeSelect();
+    }
+  }
+
+  enterModeSelect() {
+    this.screen = 'mode';
+    this.destroyTitle();
+    this.modeStuff = [];
+    const bg = this.add.rectangle(W / 2, H / 2, W, H, 0x05080f, 0.97).setDepth(55);
+    this.modeStuff.push(bg);
+    const title = this.add.text(W / 2, 110, 'SELECT PLAYER MODE', {
+      fontFamily: 'monospace', fontSize: '28px', color: '#f4c95d', fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(56);
+    this.modeStuff.push(title);
+    const one = this.add.text(270, 245, '1 PLAYER', { fontFamily: 'monospace', fontSize: '25px', color: '#f4c95d', fontStyle: 'bold' }).setOrigin(0.5).setDepth(56);
+    const two = this.add.text(530, 245, '2 PLAYERS', { fontFamily: 'monospace', fontSize: '25px', color: '#3498db', fontStyle: 'bold' }).setOrigin(0.5).setDepth(56);
+    const oneSub = this.add.text(270, 290, 'START1\nP1 solo', { fontFamily: 'monospace', fontSize: '14px', color: '#ffffff', align: 'center', lineSpacing: 6 }).setOrigin(0.5).setDepth(56);
+    const twoSub = this.add.text(530, 290, 'START2\nP1 + P2', { fontFamily: 'monospace', fontSize: '14px', color: '#ffffff', align: 'center', lineSpacing: 6 }).setOrigin(0.5).setDepth(56);
+    this.modeText = this.add.text(W / 2, 180, '', { fontFamily: 'monospace', fontSize: '15px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(56);
+    this.modePrompt = this.add.text(W / 2, 470, 'P1_U / P1_D / P1_L / P1_R: TOGGLE', { fontFamily: 'monospace', fontSize: '13px', color: '#aeb6c8' }).setOrigin(0.5).setDepth(56);
+    const confirm = this.add.text(W / 2, 515, 'START1: CONFIRM 1 PLAYER   •   START2: CONFIRM 2 PLAYERS', { fontFamily: 'monospace', fontSize: '13px', color: '#f4c95d', fontStyle: 'bold' }).setOrigin(0.5).setDepth(56);
+    this.modeStuff.push(one, two, oneSub, twoSub, this.modeText, this.modePrompt, confirm);
+    this.updateModeSelection();
+  }
+
+  updateModeSelection() {
+    const two = this.playerMode === 2;
+    this.modeText.setText('SELECTED: ' + (two ? '2 PLAYERS' : '1 PLAYER'));
+  }
+
+  handleModeInput() {
+    const nav = INPUT.pressed('P1_U') || INPUT.pressed('P1_D') || INPUT.pressed('P1_L') || INPUT.pressed('P1_R');
+    if (nav) {
+      this.playerMode = this.playerMode === 1 ? 2 : 1;
+      this.updateModeSelection();
+    }
+    if (INPUT.pressed('START1')) {
+      this.playerMode = 1;
+      this.syncModeVisibility();
+      this.enterTutorial();
+    }
+    if (INPUT.pressed('START2')) {
+      this.playerMode = 2;
+      this.syncModeVisibility();
+      this.enterTutorial();
+    }
+  }
+
+  destroyMode() {
+    if (this.modeStuff) {
+      for (const el of this.modeStuff) el.destroy();
+      this.modeStuff = null;
+    }
+  }
+
+  enterTutorial() {
+    this.screen = 'tutorial';
+    this.destroyTitle();
+    this.destroyMode();
+    this.tutStuff = [];
+    const bg = this.add.rectangle(W / 2, H / 2, W, H, 0x05080f, 0.96).setDepth(55);
+    this.tutStuff.push(bg);
+    this.tutorialText(W / 2, 32, 'CÓMO JUGAR • CONTROLES ARCADE', 25, '#f4c95d', true);
+    this.controllerPanel(205, 0xf4c95d, 'JUGADOR 1', 'P1_', 'START1');
+    this.controllerPanel(595, 0x3498db, 'JUGADOR 2', 'P2_', 'START2');
+    this.tutorialText(W / 2, 500, 'Esquivá personajes • saltá o agachate para near-miss +25 pts', 12, '#8fc9f2');
+    this.tutorialText(W / 2, 524, 'Vidas independientes • en 2P la partida termina cuando ambos caen', 11, '#aeb6c8');
+    const start = this.add.text(W / 2, 565, 'START1 / START2: ¡A CORRER!', { fontFamily: 'monospace', fontSize: '16px', color: '#f4c95d', fontStyle: 'bold' }).setOrigin(0.5).setDepth(56);
+    this.tutStuff.push(start);
+    this.tweens.add({ targets: start, alpha: 0.3, duration: 600, yoyo: true, repeat: -1 });
+  }
+
+  tutorialText(x, y, text, size, color, bold) {
+    const t = this.add.text(x, y, text, { fontFamily: 'monospace', fontSize: size + 'px', color, fontStyle: bold ? 'bold' : 'normal' }).setOrigin(0.5).setDepth(56);
+    this.tutStuff.push(t);
+    return t;
+  }
+
+  controllerPanel(x, color, title, prefix, start) {
+    this.tutorialText(x, 80, title, 16, '#' + color.toString(16).padStart(6, '0'), true);
+    this.tutorialText(x, 112, 'JOYSTICK', 11, '#aeb6c8', true);
+    this.tutorialText(x, 140, prefix + 'U  ↑    ' + prefix + 'D  ↓', 14, '#ffffff', true);
+    this.tutorialText(x, 164, prefix + 'L  ←    ' + prefix + 'R  →', 14, '#ffffff', true);
+    this.tutorialText(x, 201, 'ACTION BUTTONS', 11, '#aeb6c8', true);
+    this.tutorialText(x, 230, prefix + '1  JUMP     ' + prefix + '2  DUCK', 12, '#ffffff', true);
+    this.tutorialText(x, 258, prefix + '3  EXTRA    ' + prefix + '4  EXTRA', 12, '#c5ccd8');
+    this.tutorialText(x, 286, prefix + '5  EXTRA    ' + prefix + '6  EXTRA', 12, '#c5ccd8');
+    this.tutorialText(x, 334, start, 14, '#' + color.toString(16).padStart(6, '0'), true);
+    this.tutorialText(x, 360, start === 'START1' ? 'CONFIRM 1 PLAYER / START' : 'CONFIRM 2 PLAYERS / START', 10, '#aeb6c8');
+  }
+
+  handleTutorialInput() {
+    if (INPUT.pressed('START1') || INPUT.pressed('START2')) {
       MUSIC.play(this.stage);
       this.startGame();
+    }
+  }
+
+  destroyTutorial() {
+    if (this.tutStuff) {
+      for (const el of this.tutStuff) el.destroy();
+      this.tutStuff = null;
     }
   }
 
@@ -1495,6 +1990,16 @@ class GameScene extends Phaser.Scene {
       INPUT.consume();
       return;
     }
+    if (this.screen === 'mode') {
+      this.handleModeInput();
+      INPUT.consume();
+      return;
+    }
+    if (this.screen === 'tutorial') {
+      this.handleTutorialInput();
+      INPUT.consume();
+      return;
+    }
     if (this.screen === 'count') {
       this.updateCount(dt);
       this.updatePlayerVisual();
@@ -1510,6 +2015,9 @@ class GameScene extends Phaser.Scene {
         this.endStage();
       } else {
         this.updatePlayer(dt);
+        this.updatePlayer2(dt);
+        if (this.player.alive) this.p1Label.setPosition(this.player.x, this.player.y + 55);
+        if (this.playerMode === 2 && this.player2.alive) this.p2Label.setPosition(this.player2.x, this.player2.y + 55);
         this.updateSpawn(dt);
         this.updateObs(dt);
       }
@@ -1555,19 +2063,8 @@ class GameScene extends Phaser.Scene {
   }
 
   updatePlayerVisual() {
-    const p = this.player;
-    const right = INPUT.held('P1_R');
-    const left = INPUT.held('P1_L');
-    const wantJump = INPUT.held('P1_1');
-    const wantCrouch = INPUT.held('P1_2');
-    if (INPUT.pressed('P1_U') && p.lane > 0) p.lane--;
-    if (INPUT.pressed('P1_D') && p.lane < LANES.length - 1) p.lane++;
-    this.dx = (right ? 1 : 0) - (left ? 1 : 0);
-    p.y = lerp(p.y, LANES[p.lane], Math.min(1, 12 * 0.016));
-    p.setTexture('p_' + (wantJump ? 'jump' : (wantCrouch ? 'crouch' : 'stand')));
-    p.setScale(1, 1);
-    p.shadow.setPosition(p.x, LANES[p.lane] + 48);
-    p.shadow.setScale(1, 1);
+    this.updateOnePlayer(0.016, this.player, 1);
+    if (this.playerMode === 2) this.updateOnePlayer(0.016, this.player2, 2);
   }
 }
 
