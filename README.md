@@ -12,15 +12,38 @@ Open to everyone — you don't need to be a hackathon participant and you can jo
 
 ## 🚏 Our Game: PORTAL 11:59 — El Último Transmi
 
-Single-player horizontal lane-dodge at a Bogotá paradero. Esquivá el tráfico que cruza la avenida de noche, saltá charcos y conos, agachate bajo letreros y trailers, y subite al último TransMilenio antes de la medianoche. Dos etapas, dos paletas de noche.
+Juego arcade de **2 players** (`two_player`), con opción de partida individual desde el menú, dentro de una estación de TransMilenio en Bogotá. Elegí el modo de juego, corré por cinco carriles y esquivá policías, vendedores, cantantes, niños, estudiantes, ejecutivos, turistas y guardias para alcanzar el último bus antes de la medianoche. Cuatro etapas, obstáculos adaptativos, vidas independientes y música gabba/hardcore que aumenta su intensidad con cada fase.
 
-**Controls:**
-- **W/S** (joystick up/down) — change lanes (3 lanes: far, middle, near)
-- **U** (P1_1) — jump (puddles, cones, low traffic in your lane)
-- **I** (P1_2) — crouch (overhead signs and trailers)
-- **A/D** (joystick left/right) — move back / forward along the road
+**Controles arcade:**
 
-**Scoring:** near-misses on traffic in your lane give bonus points. Best score is saved via the arcade storage bridge.
+### Jugador 1
+- **`P1_U` / `P1_D`** — cambiar de carril
+- **`P1_L` / `P1_R`** — moverse hacia atrás / adelante
+- **`P1_1`** — saltar
+- **`P1_2`** — agacharse
+- **`P1_3` a `P1_6`** — botones adicionales reservados para futuras acciones
+- **`START1`** — confirmar 1 jugador e iniciar
+
+### Jugador 2
+- **`P2_U` / `P2_D`** — cambiar de carril
+- **`P2_L` / `P2_R`** — moverse hacia atrás / adelante
+- **`P2_1`** — saltar
+- **`P2_2`** — agacharse
+- **`P2_3` a `P2_6`** — botones adicionales reservados para futuras acciones
+- **`START2`** — confirmar 2 jugadores e iniciar
+
+En el menú, el joystick de P1 permite alternar entre **1 PLAYER** y **2 PLAYERS**. Los near-misses al saltar o agacharse otorgan **+25 puntos**. El mejor puntaje se guarda mediante el puente de almacenamiento de la arcade.
+
+**Modo de publicación:** `two_player`.
+
+## 👥 Equipo de desarrollo
+
+Juego realizado por [Ziro](https://ziro.team/), empresa de desarrollo de software.
+
+- Javier Gómez
+- Santiago Salazar
+- Alejandro Moreno
+- Juan Albarracín
 
 
 

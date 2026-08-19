@@ -851,7 +851,7 @@ class GameScene extends Phaser.Scene {
 
     // Route signs
     const routes = ['B', 'K', 'H', 'J'];
-    const routeBgs = [0xc0392b, 0x2980b9, 0x27ae60, 0xf39c12];
+    const routeBgs = [0xc0392b, 0x3498db, 0x666666, 0xf4c95d];
     for (let i = 0; i < 4; i++) {
       const rx = 130 + i * 170;
       const sg = this.add.graphics();
@@ -865,7 +865,7 @@ class GameScene extends Phaser.Scene {
     }
 
     // Colorful posters
-    const posterColors = [0xe74c3c, 0x3498db, 0x2ecc71, 0xf39c12, 0x9b59b6];
+    const posterColors = [0xc0392b, 0x3498db, 0x666666, 0xf4c95d, 0x222222];
     let seed = 12345;
     const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
     const poster = this.add.graphics();
@@ -1259,7 +1259,7 @@ class GameScene extends Phaser.Scene {
     this.score += 25;
     this.scoreTextUpdate();
     AUDIO.near();
-    this.burst(p.x, p.y, 6, 0x2ecc71);
+    this.burst(p.x, p.y, 6, 0xf4c95d);
   }
 
   hit(p) {
@@ -1283,7 +1283,7 @@ class GameScene extends Phaser.Scene {
     AUDIO.hit();
     this.cameras.main.shake(160, 0.008);
     this.flashRed();
-    this.burst(p.x, p.y, 8, 0xff5577);
+    this.burst(p.x, p.y, 8, 0xc0392b);
     if (p.lives <= 0) {
       p.alive = false;
       this.setPlayerVisible(p, false);
@@ -1590,7 +1590,7 @@ class GameScene extends Phaser.Scene {
     const s = Math.max(0, Math.ceil(this.timer || 0));
     this.timerText.setText('00:' + String(s).padStart(2, '0'));
     if (s <= 5 && this.screen === 'play') {
-      this.timerText.setColor('#ff5577');
+      this.timerText.setColor('#c0392b');
     } else {
       this.timerText.setColor('#aeb6c8');
     }
